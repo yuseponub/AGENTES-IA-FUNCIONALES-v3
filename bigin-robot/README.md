@@ -1,193 +1,205 @@
-# 🤖 Modelo IA Distribuida - Robot Base + Bigin Adapter
+# Bigin Robot - Automatización CRM
 
-Sistema de robots que operan CRMs y plataformas logísticas.
+Robot de automatización para Bigin CRM usando Playwright.
 
-## 📁 Estructura del Proyecto
+## 📁 Estructura
 
 ```
-modelo-ia-distribuida/
+bigin-robot/
 ├── packages/
-│   ├── robot-base/              # Core del robot (Playwright, screenshots, sessions)
+│   ├── robot-base/      # Base framework para robots
+│   ├── robot-api/       # API REST del robot
 │   └── adapters/
-│       └── bigin/               # Adapter para Bigin CRM (Zoho) - TEMPORAL
-├── apps/
-│   └── orchestrator-api/        # API (próximo)
-└── storage/
-    ├── artifacts/               # Screenshots
-    ├── logs/                    # Logs
-    └── sessions/                # Cookies guardadas
+│       └── bigin/       # Adaptador específico para Bigin CRM
+├── storage/             # Almacenamiento de datos
+│   ├── sessions/        # Sesiones de navegador
+│   ├── artifacts/       # Screenshots y evidencias
+│   └── logs/           # Logs de operaciones
+└── robot-api-manager.sh # Script de gestión del robot
 ```
 
-## 🚀 Setup Rápido
+## 🚀 Instalación y Configuración
 
 ### 1. Instalar dependencias
 
 ```bash
-cd /home/n8n-claude/proyectos/modelo-ia-distribuida
-
-# Instalar root
+cd /root/v3dsl-bot/bigin-robot
 npm install
-
-# Instalar packages
-npm install --workspace=@modelo-ia/robot-base
-npm install --workspace=@modelo-ia/adapter-bigin
-
-# Instalar Playwright browsers
-cd packages/robot-base
-npx playwright install chromium
-cd ../..
 ```
 
-### 2. Configurar credenciales
-
-```bash
-# Copiar ejemplo
-cp .env.example .env
-
-# Editar con tus credenciales de Bigin
-nano .env
-```
-
-**.env debe contener:**
-```
-BIGIN_URL=https://crm.zoho.com/crm/org123456/tab/Leads
-BIGIN_EMAIL=tu-email@example.com
-BIGIN_PASSWORD=tu-password
-
-STORAGE_PATH=/home/n8n-claude/proyectos/modelo-ia-distribuida/storage
-
-PLAYWRIGHT_HEADLESS=false
-PLAYWRIGHT_SLOW_MO=500
-
-LOG_LEVEL=debug
-```
-
-### 3. Build packages
+### 2. Compilar TypeScript
 
 ```bash
 npm run build
 ```
 
-### 4. Test login a Bigin
+### 3. Iniciar el robot
+
+#### Opción A: Usando el script de gestión (recomendado)
 
 ```bash
-npm run test:login --workspace=@modelo-ia/adapter-bigin
+# Iniciar
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh start
+
+# Detener
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh stop
+
+# Reiniciar
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
+
+# Ver estado
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh status
+
+# Ver logs en tiempo real
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh logs
+
+# Recompilar código
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh build
 ```
 
-**Deberías ver:**
-- Browser abrirse
-- Login automático a Bigin
-- Screenshot guardado en `storage/artifacts/`
-- Mensaje: ✅ Login test passed!
+#### Opción B: Usando systemd (inicio automático)
 
----
-
-## 🧪 Tests Disponibles
-
-### Test Login (ya creado)
 ```bash
-npm run test:login --workspace=@modelo-ia/adapter-bigin
+# Habilitar inicio automático
+sudo systemctl enable robot-api
+
+# Iniciar servicio
+sudo systemctl start robot-api
+
+# Ver estado
+sudo systemctl status robot-api
+
+# Ver logs
+journalctl -u robot-api -f
 ```
 
-Verifica que el login funciona y guarda sesión.
+#### Opción C: Manual
 
----
-
-## 📚 Próximos Pasos
-
-### ✅ Completado:
-- [x] Robot Base (Playwright, screenshots, sessions)
-- [x] Bigin Adapter base
-- [x] Login funcional
-- [x] **🆕 Sistema de timeout de sesión (30 min)**
-- [x] **🆕 Verificación de ventanas cerradas**
-- [x] **🆕 Sistema de relogin automático mejorado**
-- [x] **🆕 Sistema de retry con backoff exponencial**
-- [x] **🆕 Notificaciones al equipo en caso de fallo**
-- [x] **🆕 Campo CallBell clickeable en órdenes**
-- [x] **🆕 Retorno de Order ID y URL**
-- [x] Tool: `find_lead`
-- [x] Tool: `add_note`
-- [x] Tool: `create_order` (completo con todas las funcionalidades)
-
-### 📋 Por hacer:
-- [ ] Implementar notificaciones reales (Slack, Email, WhatsApp)
-- [ ] Tool: `update_field`
-- [ ] Orchestrator API
-- [ ] Courier adapters
-- [ ] Playbooks end-to-end
-
----
-
-## 🆕 Nuevas Funcionalidades (Enero 2026)
-
-**Ver documentación completa:** [`docs/NUEVAS-FUNCIONALIDADES.md`](docs/NUEVAS-FUNCIONALIDADES.md)
-
-### Resumen de Mejoras:
-
-1. **🕐 Timeout de Sesión (30 min)**: Gestión automática de sesiones con timeout de 30 minutos
-2. **🪟 Verificación de Ventanas**: Detección de ventanas cerradas o sesiones perdidas
-3. **🔄 Relogin Automático**: Sistema inteligente que garantiza sesión válida antes de operaciones
-4. **🔁 Retry con Backoff**: Reintento automático de operaciones fallidas (max 3 intentos: 1s, 2s, 4s)
-5. **🚨 Notificaciones**: Alertas al equipo cuando operaciones críticas fallan
-6. **🔗 Campo CallBell**: Link de conversación de Callbell en órdenes
-7. **🆔 Order ID/URL**: Retorno automático del ID y URL de órdenes creadas
-
-### Ejemplo de Uso:
-
-```typescript
-const result = await adapter.createOrder({
-  ordenName: 'Orden #12345',
-  telefono: '+573001234567',
-  callBell: 'https://dash.callbell.eu/chat/abc123', // ✅ Nuevo
-  // ...otros campos...
-});
-
-console.log('✅ Order ID:', result.orderId);
-console.log('🔗 Order URL:', result.orderUrl);
+```bash
+cd /root/v3dsl-bot/bigin-robot/packages/robot-api
+npm run start
 ```
 
-**Beneficios:**
-- ✅ Mayor confiabilidad con retry automático
-- ✅ No más sesiones expiradas
-- ✅ Recuperación automática de ventanas cerradas
-- ✅ Monitoreo proactivo con notificaciones
-- ✅ Trazabilidad completa con Order IDs
+## 📡 API Endpoints
 
----
+El robot expone una API REST en `http://localhost:3000`:
+
+### Health Check
+```bash
+GET /health
+```
+
+### Crear Orden en Bigin
+```bash
+POST /bigin/create-order
+Content-Type: application/json
+
+{
+  "ordenName": "Juan Perez",
+  "stage": "Nuevo Ingreso",
+  "amount": 109900,
+  "telefono": "573137549286",
+  "direccion": "Calle 31 #39-15",
+  "municipio": "Bucaramanga",
+  "departamento": "Santander",
+  "email": "juan@example.com",
+  "callBell": "https://dash.callbell.eu/chat/xxxxx"
+}
+```
+
+## 🔄 Actualización del Robot
+
+Cuando hagas cambios en el código del robot en GitHub:
+
+1. **Pull los cambios:**
+   ```bash
+   cd /root/v3dsl-bot
+   git pull origin master
+   ```
+
+2. **Recompilar y reiniciar:**
+   ```bash
+   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh build
+   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
+   ```
+
+## 📋 Características
+
+- ✅ Creación automática de órdenes en Bigin CRM
+- ✅ Gestión de sesiones con timeout (30 minutos)
+- ✅ Auto-relogin cuando expira sesión
+- ✅ Retry automático con backoff exponencial
+- ✅ Screenshots de evidencia
+- ✅ Logs detallados de operaciones
+- ✅ Campo CallBell clickeable para WhatsApp
+
+## 🔧 Desarrollo
+
+### Estructura de paquetes
+
+El proyecto usa **npm workspaces** con 3 paquetes:
+
+1. **robot-base**: Framework base para crear robots
+2. **robot-api**: API REST que expone funcionalidad del robot
+3. **adapter-bigin**: Implementación específica para Bigin CRM
+
+### Scripts disponibles
+
+```bash
+npm run build         # Compilar todos los paquetes
+npm run dev          # Modo desarrollo con watch
+npm run start        # Iniciar en producción
+```
+
+## 📝 Logs
+
+Los logs se guardan en:
+- `/tmp/robot-api.log` - Log principal del robot
+- `storage/logs/` - Logs de operaciones específicas
+
+## 🔐 Seguridad
+
+- Las sesiones se guardan encriptadas en `storage/sessions/`
+- El robot valida automáticamente la sesión antes de cada operación
+- Timeout de 30 minutos de inactividad
 
 ## 🐛 Troubleshooting
 
-### Error: "Playwright browser not found"
+### El robot no inicia
 ```bash
-cd packages/robot-base
-npx playwright install chromium
+# Verificar si el puerto 3000 está ocupado
+lsof -i :3000
+
+# Ver logs
+tail -f /tmp/robot-api.log
 ```
 
-### Error: "Cannot find module '@modelo-ia/robot-base'"
+### Error de sesión
 ```bash
+# Eliminar sesiones antiguas
+rm -f /root/v3dsl-bot/bigin-robot/storage/sessions/*.json
+
+# Reiniciar robot
+/root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
+```
+
+### Errores de compilación
+```bash
+# Limpiar y reinstalar
+cd /root/v3dsl-bot/bigin-robot
+rm -rf node_modules package-lock.json
+npm install
 npm run build
 ```
 
-### Error: "Login failed"
-- Verifica que BIGIN_URL, BIGIN_EMAIL, BIGIN_PASSWORD son correctos
-- Verifica que no tienes 2FA activado en Bigin
-- Revisa screenshot en `storage/artifacts/error-*.png`
+## 🔗 Integración con n8n
 
-### Browser no se abre (headless mode)
-```bash
-# En .env, cambiar a:
-PLAYWRIGHT_HEADLESS=false
-```
+El robot se integra con n8n a través del workflow **05-order-manager.json** que envía peticiones HTTP a `http://robot-api.local:3000/bigin/create-order`.
 
----
+### Configuración DNS
 
-## 📝 Notas
+El robot es accesible desde contenedores Docker (n8n) mediante:
+- `http://robot-api.local:3000` (hostname configurado en Docker)
+- `http://localhost:3000` (desde el host)
 
-- **Bigin Adapter es TEMPORAL**: Lo usamos mientras el developer crea tu CRM propio
-- **Selectores pueden cambiar**: Si Zoho actualiza Bigin, necesitarás ajustar `bigin/src/selectors.ts`
-- **Sessions se guardan**: Después del primer login, usa cookies guardadas (no login cada vez)
-
----
-
-**Siguiente:** Implementar `find_lead` tool para buscar leads en Bigin.
+Las reglas de iptables están configuradas en `/etc/iptables-docker-robot.sh`.
