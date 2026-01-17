@@ -1,0 +1,47 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Dependencies
+bigin-robot/node_modules/
+bigin-robot/package-lock.json
+
+# Build outputs
+dist/
+build/
+*.js.map
+*.d.ts.map
+
+# Logs
+*.log
+logs/
+*.log.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Storage (sessions, screenshots, cookies)
+bigin-robot/storage/sessions/*.json
+bigin-robot/storage/artifacts/*.png
+bigin-robot/storage/logs/*.log
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Debug files
+bigin-robot/debug-*.png
+bigin-robot/debug-*.js

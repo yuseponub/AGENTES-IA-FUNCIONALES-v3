@@ -1,0 +1,21 @@
+{
+  "name": "modelo-ia-distribuida",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "packages/adapters/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=robot-base",
+    "test:bigin": "npm run test --workspace=@modelo-ia/adapter-bigin",
+    "build": "npm run build --workspaces",
+    "clean": "rm -rf node_modules packages/*/node_modules packages/adapters/*/node_modules apps/*/node_modules"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3",
+    "tsx": "^4.7.0"
+  }
+}
