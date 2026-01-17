@@ -1,0 +1,425 @@
+{
+  "version": "1.1.0",
+  "description": "Directorio de plantillas de mensajes de Carolina",
+  "last_updated": "2025-12-30",
+  "plantillas_base": {
+    "/hola": {
+      "texto": "Hola💁 Bienvenido a Somnio, donde tus sueños se hacen realidad 😴",
+      "delay_s": 0,
+      "notas": "Saludo inicial - SIEMPRE se usa en combinaciones con preguntas"
+    },
+    "/precio": {
+      "texto": "Nuestro ELIXIR DEL SUEÑO tiene un valor de $77,900 con envio gratis, este contiene 90 comprimidos de melatonina y magnesio. Tambien manejamos promociones extra si compras el combo 2X o 3X🤗",
+      "delay_s": 3,
+      "notas": "Respuesta principal de precio - incluye mención de promos"
+    },
+    "/contenidoenvase": {
+      "texto": "Nuestro ELIXIR DEL SUEÑO contiene 90 comprimidos de melatonina y magnesio para relajarte y ayudarte a conciliar el sueño 😴",
+      "delay_s": 0,
+      "notas": "Respuesta específica sobre contenido del envase - usar cuando preguntan cuántas cápsulas/comprimidos tiene"
+    },
+    "/tiempoefecto1": {
+      "texto": "Verás los resultados desde los primeros 3-7 dias de uso. La melatonina te ayudará a descansar mejor mediante un proceso regulando tu ciclo biologico de sueño. El magnesio entrara como un relajante que te ayudara a calmar tu mente y tu cuerpo, haciendo que dormir sea mas facil.",
+      "delay_s": 5,
+      "notas": "Mensaje complementario SIEMPRE usado en primera pregunta del cliente"
+    },
+    "/tiempoefecto2": {
+      "texto": "Lo ideal es que con los días y de forma natural se ajuste tu reloj biológico y puedas tener un descanso profundo y reparador. Recuerda que no es un somnífero‼️",
+      "delay_s": 4,
+      "notas": "Mensaje dinámico - aclara que no es somnífero, usado en segunda duda"
+    },
+    "/beneficiosextra": {
+      "texto": "El Elixir del Sueño es la solución ideal para mejorar la calidad de tu descanso. No solo restaura tu ciclo de sueño, sino que también alivia el estrés, mejora tu metabolismo y fortalece tus defensas. 😴✨",
+      "delay_s": 4,
+      "notas": "Mensaje dinámico - beneficios adicionales persuasivos, alternativa a /tiempoefecto2"
+    },
+    "/modopago": {
+      "texto": "Recuerda que el pago lo haces una vez recibes el producto en tu hogar y lo pagas en efectivo💴🏡",
+      "delay_s": 3,
+      "notas": "Información de pago contraentrega"
+    },
+    "/modouso": {
+      "texto": "Debes consumir 1 comprimido 30min antes de dormir, todos los dias.",
+      "delay_s": 0,
+      "notas": "Instrucciones de uso"
+    },
+    "/envio": {
+      "texto": "Hacemos envíos a toda Colombia 🚚 (gratis).",
+      "delay_s": 0,
+      "notas": "Información de cobertura de envío"
+    },
+    "/envio_empresas": {
+      "texto": "Usamos Coordinadora, Envia, Interrapidísimo o domiciliarios propios según tu ciudad.",
+      "delay_s": 3,
+      "notas": "Complemento de envío con empresas"
+    },
+    "/invima": {
+      "texto": "Contamos con producción en laboratorio con registro Invima. Fabricante: PHARMA SOLUTIONS SAS.",
+      "delay_s": 0,
+      "notas": "Certificación Invima"
+    },
+    "/ubicacion": {
+      "texto": "Tenemos centros de distribución en las principales ciudades del país, sin embargo nuestro punto principal esta ubicado en la ciudad de Bucaramanga, Santander. (Manejamos envios contraentrega a nivel nacional)",
+      "delay_s": 0,
+      "notas": "Ubicación física y centros de distribución"
+    },
+    "/contraindicaciones": {
+      "texto": "La melatonina y el citrato de magnesio son compuestos seguros y bien tolerados.",
+      "delay_s": 0,
+      "notas": "Seguridad del producto"
+    },
+    "/contraindicaciones_anticoagulantes": {
+      "texto": "Si tomas anticoagulantes, consulta con tu médico antes de usarlo.",
+      "delay_s": 4,
+      "notas": "Precaución con anticoagulantes"
+    },
+    "/captura_datos_intro": {
+      "texto": "Por supuesto! Solo tienes que regalarnos los siguientes datos:",
+      "delay_s": 0,
+      "notas": "Introducción a solicitud de datos"
+    },
+    "/captura_datos_lista": {
+      "texto": "Nombre:\nApellido:\nTeléfono:\nDirección completa:\nBarrio:\nDepartamento:\nCiudad:\nCorreo electrónico:",
+      "delay_s": 3,
+      "notas": "Lista de datos requeridos - SIN indicaciones extras"
+    },
+    "/pedido_1x": {
+      "texto": "Pedido recibido✅ 1X ELIXIR DEL SUEÑO por un valor de $77,900 envío gratis.",
+      "delay_s": 0,
+      "notas": "Confirmación pedido pack 1x"
+    },
+    "/pedido_2x": {
+      "texto": "Pedido recibido✅ 2X ELIXIR DEL SUEÑO por un valor de $109,900 envío gratis.",
+      "delay_s": 0,
+      "notas": "Confirmación pedido pack 2x"
+    },
+    "/pedido_3x": {
+      "texto": "Pedido recibido✅ 3X ELIXIR DEL SUEÑO por un valor de $139,900 envío gratis.",
+      "delay_s": 0,
+      "notas": "Confirmación pedido pack 3x"
+    },
+    "/confirmar_compra": {
+      "texto": "Deseas confirmar tu compra?",
+      "delay_s": 3,
+      "notas": "Pregunta de confirmación final"
+    },
+    "/compra_confirmada_1": {
+      "texto": "Perfecto! Despacharemos tu pedido lo antes posible✅ Una vez entreguemos el pedido en transportadora te enviaremos la guia de tu producto",
+      "delay_s": 0,
+      "notas": "Confirmación de despacho"
+    },
+    "/compra_confirmada_2": {
+      "texto": "Recuerda tener el efectivo listo el día que te llegue el pedido para que puedas recibir tu compra. En caso de que no te vayas a encontrar en tu casa dejárselo a alguien para que lo reciba✅💴",
+      "delay_s": 3,
+      "notas": "Recordatorio de pago contraentrega"
+    },
+    "/no_confirmado": {
+      "texto": "Entiendo. ¿Deseas que te comparta nuevamente las **promociones** o prefieres que **te contacte un asesor humano** para resolver tus dudas? 🙌",
+      "delay_s": 0,
+      "notas": "Opción cuando no confirma compra en la confirmación final"
+    },
+    "/despueslopido": {
+      "texto": "Claro que sí 🤍 Esperamos tu mensaje para brindarte la mejor solución a tus noches de insomnio😴",
+      "delay_s": 0,
+      "notas": "Despedida amable cuando cliente dice que no le interesa o no lo quiere (se puede quitar 'Claro que sí' si el contexto lo requiere)"
+    },
+    "/fallback": {
+      "texto": "Regálame 1 minuto por favor",
+      "delay_s": 0,
+      "notas": "Escalación a humano - Simula respuesta humana sin revelar que es bot"
+    },
+    "/info_promo_intro": {
+      "texto": "Estas son las promociones que manejamos 😊",
+      "delay_s": 0,
+      "notas": "Mensaje introductorio para info_promociones - Informativo, sin presión de venta"
+    },
+    "/info_promo_pregunta": {
+      "texto": "¿Te gustaría adquirir alguno de estos paquetes?",
+      "delay_s": 4,
+      "notas": "Pregunta final de info_promociones - Si responde sí, activar captura_datos_si_compra"
+    }
+  },
+  "plantillas_callbell": {
+    "/plantilla_producto": {
+      "template_name": "/1",
+      "type": "callbell_template",
+      "descripcion": "Plantilla con imagen del producto ELIXIR DEL SUEÑO",
+      "texto_alternativo": "¿Deseas adquirir tu ELIXIR DEL SUEÑO?",
+      "delay_s": 3,
+      "notas": "Usar template de Callbell en lugar de texto + IMAGEN_PRODUCTO",
+      "template_uuid": "e356a05a9a1046c9bd1b5a84b467a496"
+    },
+    "/plantilla_promociones": {
+      "template_name": "promociones VENTA",
+      "type": "callbell_template",
+      "descripcion": "Plantilla con imagen de promociones 1x, 2x, 3x",
+      "texto_alternativo": "Estas son las promociones que manejamos, ¿Cuál deseas adquirir?😊",
+      "delay_s": 0,
+      "notas": "Usar template de Callbell en lugar de texto + IMAGEN_PROMOCIONES",
+      "template_uuid": "06cf7d5b74c9430493c30f4ae799603a"
+    },
+    "/plantilla_info_promociones": {
+      "template_name": "promociones VENTA",
+      "type": "callbell_template",
+      "descripcion": "Plantilla con imagen de promociones 1x, 2x, 3x (para intent informativo)",
+      "texto_alternativo": "• 1×: $77,900 (envío gratis)\n• 2×: $109,900 (ahorras $45,900)\n• 3×: $139,900 (ahorras $93,800)",
+      "delay_s": 3,
+      "notas": "Misma imagen que ofrecer_promos pero con tono informativo (no de venta directa)",
+      "template_uuid": "06cf7d5b74c9430493c30f4ae799603a"
+    }
+  },
+  "combinaciones_intents": {
+    "hola": {
+      "primera_vez": [
+        "/hola",
+        "/plantilla_producto"
+      ],
+      "notas": "Saludo simple sin pregunta adicional"
+    },
+    "hola+precio": {
+      "primera_vez": [
+        "/hola",
+        "/precio",
+        "/tiempoefecto1",
+        "/modopago"
+      ],
+      "siguientes": [
+        "/hola",
+        "/precio",
+        "/tiempoefecto2"
+      ],
+      "notas": "Saludo + pregunta precio: respuesta COMPLETA en primera vez, incluye /tiempoefecto2 en siguientes"
+    },
+    "hola+como_se_toma": {
+      "primera_vez": [
+        "/hola",
+        "/modouso",
+        "/tiempoefecto1",
+        "/tiempoefecto2"
+      ],
+      "siguientes": [
+        "/hola",
+        "/modouso",
+        "/tiempoefecto2"
+      ],
+      "notas": "Saludo + modo de uso: incluye tiempo de efecto, incluye /tiempoefecto2 en siguientes"
+    },
+    "precio": {
+      "primera_vez": [
+        "/precio",
+        "/tiempoefecto1",
+        "/modopago"
+      ],
+      "siguientes": [
+        "/precio",
+        "/tiempoefecto2"
+      ],
+      "notas": "Solo precio sin saludo: 3 mensajes en primera vez, 2 en siguientes (incluye /tiempoefecto2)"
+    },
+    "contenido_envase": {
+      "primera_vez": [
+        "/contenidoenvase",
+        "/tiempoefecto1"
+      ],
+      "siguientes": [
+        "/contenidoenvase"
+      ],
+      "notas": "Contenido del envase: 2 mensajes primera vez, 1 en siguientes"
+    },
+    "como_se_toma": {
+      "primera_vez": [
+        "/modouso",
+        "/tiempoefecto1",
+        "/tiempoefecto2"
+      ],
+      "siguientes": [
+        "/modouso",
+        "/tiempoefecto2"
+      ],
+      "notas": "Modo de uso: 3 mensajes en primera vez, 2 en siguientes (incluye /tiempoefecto2)"
+    },
+    "modopago": {
+      "primera_vez": [
+        "/modopago"
+      ],
+      "siguientes": [
+        "/modopago"
+      ],
+      "notas": "Modo de pago: siempre igual"
+    },
+    "envio": {
+      "primera_vez": [
+        "/envio",
+        "/envio_empresas"
+      ],
+      "siguientes": [
+        "/envio"
+      ],
+      "notas": "Envío: 2 mensajes primera vez"
+    },
+    "invima": {
+      "primera_vez": [
+        "/invima"
+      ],
+      "siguientes": [
+        "/invima"
+      ],
+      "notas": "Invima: siempre igual"
+    },
+    "ubicacion": {
+      "primera_vez": [
+        "/ubicacion",
+        "/modopago"
+      ],
+      "siguientes": [
+        "/ubicacion"
+      ],
+      "notas": "Ubicación física: 2 mensajes primera vez (incluye info de envíos contraentrega)"
+    },
+    "hola+ubicacion": {
+      "primera_vez": [
+        "/hola",
+        "/ubicacion",
+        "/modopago"
+      ],
+      "siguientes": [
+        "/hola",
+        "/ubicacion"
+      ],
+      "notas": "Saludo + pregunta ubicación: 3 mensajes primera vez"
+    },
+    "contraindicaciones": {
+      "primera_vez": [
+        "/contraindicaciones",
+        "/contraindicaciones_anticoagulantes"
+      ],
+      "siguientes": [
+        "/contraindicaciones"
+      ],
+      "notas": "Contraindicaciones: 2 mensajes primera vez"
+    },
+    "captura_datos_si_compra": {
+      "primera_vez": [
+        "/captura_datos_intro",
+        "/captura_datos_lista"
+      ],
+      "siguientes": [
+        "/captura_datos_intro",
+        "/captura_datos_lista"
+      ],
+      "notas": "Captura de datos: siempre igual"
+    },
+    "hola+captura_datos_si_compra": {
+      "primera_vez": [
+        "/hola",
+        "/captura_datos_intro",
+        "/captura_datos_lista"
+      ],
+      "siguientes": [
+        "/hola",
+        "/captura_datos_intro",
+        "/captura_datos_lista"
+      ],
+      "notas": "Saludo + captura de datos: incluye saludo + afirmación + lista"
+    },
+    "ofrecer_promos": {
+      "primera_vez": [
+        "/plantilla_promociones"
+      ],
+      "siguientes": [
+        "/plantilla_promociones"
+      ],
+      "notas": "Usar plantilla de Callbell con imagen"
+    },
+    "resumen_1x": {
+      "primera_vez": [
+        "/pedido_1x",
+        "/confirmar_compra"
+      ],
+      "siguientes": [
+        "/pedido_1x",
+        "/confirmar_compra"
+      ],
+      "notas": "Resumen pack 1x"
+    },
+    "resumen_2x": {
+      "primera_vez": [
+        "/pedido_2x",
+        "/confirmar_compra"
+      ],
+      "siguientes": [
+        "/pedido_2x",
+        "/confirmar_compra"
+      ],
+      "notas": "Resumen pack 2x"
+    },
+    "resumen_3x": {
+      "primera_vez": [
+        "/pedido_3x",
+        "/confirmar_compra"
+      ],
+      "siguientes": [
+        "/pedido_3x",
+        "/confirmar_compra"
+      ],
+      "notas": "Resumen pack 3x"
+    },
+    "compra_confirmada": {
+      "primera_vez": [
+        "/compra_confirmada_1",
+        "/compra_confirmada_2"
+      ],
+      "siguientes": [
+        "/compra_confirmada_1",
+        "/compra_confirmada_2"
+      ],
+      "notas": "Confirmación de compra"
+    },
+    "no_confirmado": {
+      "primera_vez": [
+        "/no_confirmado"
+      ],
+      "siguientes": [
+        "/no_confirmado"
+      ],
+      "notas": "No confirmación en etapa final"
+    },
+    "no_interesa": {
+      "primera_vez": [
+        "/despueslopido"
+      ],
+      "siguientes": [
+        "/despueslopido"
+      ],
+      "notas": "Cliente no interesado - despedida amable"
+    },
+    "fallback": {
+      "primera_vez": [
+        "/fallback"
+      ],
+      "siguientes": [
+        "/fallback"
+      ],
+      "notas": "Fallback a humano"
+    },
+    "info_promociones": {
+      "primera_vez": [
+        "/info_promo_intro",
+        "/plantilla_info_promociones",
+        "/info_promo_pregunta"
+      ],
+      "siguientes": [
+        "/info_promo_intro",
+        "/plantilla_info_promociones",
+        "/info_promo_pregunta"
+      ],
+      "notas": "Información de promociones - Tono informativo, sin presión de venta"
+    }
+  },
+  "reglas_primera_pregunta": {
+    "descripcion": "Sistema para detectar si es la primera pregunta del cliente o subsiguiente",
+    "criterio": "Contar preguntas del usuario en el historial (excluyendo saludo 'hola')",
+    "implementacion": "Si preguntas_realizadas <= 1 → usar 'primera_vez', sino → usar 'siguientes'",
+    "notas": "El saludo 'hola' NO cuenta como pregunta. Primera pregunta real = respuesta completa"
+  }
+}

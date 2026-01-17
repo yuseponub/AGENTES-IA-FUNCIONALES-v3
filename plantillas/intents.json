@@ -1,0 +1,457 @@
+{
+  "version": "1.1.0",
+  "description": "Definición completa de intents de Carolina con reglas de detección y combinaciones",
+  "last_updated": "2025-12-30",
+
+  "intents": {
+    "hola": {
+      "id": "hola",
+      "nombre": "Saludo Inicial",
+      "descripcion": "Cliente saluda sin pregunta adicional",
+      "prioridad": 1,
+      "deteccion": {
+        "regex": "(?i)(^|\\s)(hola|buenas|buenos d[ií]as|buenas noches|buenas tardes|qu[eé] tal|saludos)(\\s|$|\\?)",
+        "palabras_clave": ["hola", "buenas", "buenos dias", "buenas noches", "que tal"],
+        "contexto": "Debe ser saludo aislado sin pregunta adicional"
+      },
+      "respuesta": {
+        "primera_vez": ["/hola", "/plantilla_producto"],
+        "siguientes": ["/hola", "/plantilla_producto"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "precio": {
+      "id": "precio",
+      "nombre": "Consulta de Precio",
+      "descripcion": "Cliente pregunta por el precio del producto",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(precio|valor|vale|cu[aá]nto vale|cu[aá]nto cuesta|costo|cuanto es|cuanto sale)",
+        "palabras_clave": ["precio", "valor", "costo", "cuanto"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/precio", "/tiempoefecto1", "/modopago"],
+        "siguientes": ["/precio", "/tiempoefecto1", "/modopago"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "info_promociones": {
+      "id": "info_promociones",
+      "nombre": "Información de Promociones",
+      "descripcion": "Cliente pregunta qué promociones hay disponibles (sin estar en proceso de compra)",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(qu[eé] promociones|cu[aá]les son las promos|paquetes disponibles|ofertas|descuentos|combos|precios de los packs|qu[eé] paquetes|cu[aá]les paquetes)",
+        "palabras_clave": ["promociones", "promos", "paquetes", "ofertas", "descuentos", "combos"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/info_promo_intro", "/plantilla_info_promociones", "/info_promo_pregunta"],
+        "siguientes": ["/info_promo_intro", "/plantilla_info_promociones", "/info_promo_pregunta"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      },
+      "notas": "Intent informativo - NO es parte del flujo de compra. Diferente de ofrecer_promos que requiere datos completos."
+    },
+
+    "contenido_envase": {
+      "id": "contenido_envase",
+      "nombre": "Contenido del Envase",
+      "descripcion": "Cliente pregunta específicamente cuántas cápsulas o comprimidos tiene el frasco",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(cu[aá]ntas c[aá]psulas|cu[aá]ntos comprimidos|cu[aá]ntas pastillas|qu[eé] contiene el frasco|qu[eé] trae el frasco|contenido del frasco|cuantas unidades|cuantas trae)",
+        "palabras_clave": ["cuantas capsulas", "cuantos comprimidos", "que contiene", "cuantas trae"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/contenidoenvase", "/tiempoefecto1"],
+        "siguientes": ["/contenidoenvase"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      },
+      "notas": "Para preguntas amplias como 'cuánto dura', usar intent 'precio' en su lugar"
+    },
+
+    "como_se_toma": {
+      "id": "como_se_toma",
+      "nombre": "Modo de Uso",
+      "descripcion": "Cliente pregunta cómo se usa el producto",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(c[oó]mo se toma|c[oó]mo se usa|dosis|modo de uso|instrucciones|indicaciones|c[oó]mo funciona|c[oó]mo lo tomo)",
+        "palabras_clave": ["como se toma", "dosis", "modo de uso", "como funciona"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/modouso", "/tiempoefecto1", "/tiempoefecto2"],
+        "siguientes": ["/modouso", "/tiempoefecto2"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "modopago": {
+      "id": "modopago",
+      "nombre": "Métodos de Pago",
+      "descripcion": "Cliente pregunta formas de pago",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(pago|pagar|m[eé]todos? de pago|formas? de pago|contraentrega|efectivo|transferencia|nequi|bancolombia|daviplata|pse|tarjeta|cr[eé]dito|d[eé]bito|link|como pago)",
+        "palabras_clave": ["pago", "pagar", "contraentrega", "efectivo", "transferencia"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/modopago"],
+        "siguientes": ["/modopago"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      },
+      "notas": "Si mencionan PSE/tarjeta/link → needs_payment_link: true"
+    },
+
+    "envio": {
+      "id": "envio",
+      "nombre": "Información de Envío",
+      "descripcion": "Cliente pregunta sobre envíos y cobertura",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(env[ií]o|entrega|cobertura|d[oó]nde est[aá]n|a d[oó]nde llegan|ubicaci[oó]n|despacho|envian|llega a|tiene envio)",
+        "palabras_clave": ["envio", "entrega", "cobertura", "despacho"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/envio", "/envio_empresas"],
+        "siguientes": ["/envio"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "invima": {
+      "id": "invima",
+      "nombre": "Registro Invima",
+      "descripcion": "Cliente pregunta por certificaciones o registro sanitario",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(invima|registro sanitario|certificado|certificaci[oó]n|regulado|aprobado|seguro|confiable)",
+        "palabras_clave": ["invima", "registro", "certificado"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/invima"],
+        "siguientes": ["/invima"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "ubicacion": {
+      "id": "ubicacion",
+      "nombre": "Ubicación Física",
+      "descripcion": "Cliente pregunta por sede física, ubicación o punto de venta",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(sede f[ií]sica|ubicaci[oó]n|d[oó]nde est[aá]n ubicados|tienen tienda|punto de venta|direcci[oó]n|oficina|local|visitarlos|ir personalmente)",
+        "palabras_clave": ["sede", "ubicacion", "tienda", "local", "oficina"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/ubicacion", "/modopago"],
+        "siguientes": ["/ubicacion"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "contraindicaciones": {
+      "id": "contraindicaciones",
+      "nombre": "Contraindicaciones y Efectos",
+      "descripcion": "Cliente pregunta sobre efectos secundarios o precauciones",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(contraindicaciones|efectos secundarios|efectos adversos|interacciones|precauciones|embarazo|lactancia|hipertens[oó]|medicaci[oó]n|seguro|da[ñn]a|mal|riesgo)",
+        "palabras_clave": ["contraindicaciones", "efectos", "seguro", "riesgo"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/contraindicaciones", "/contraindicaciones_anticoagulantes"],
+        "siguientes": ["/contraindicaciones"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "captura_datos_si_compra": {
+      "id": "captura_datos_si_compra",
+      "nombre": "Intención de Compra",
+      "descripcion": "Cliente expresa intención de comprar",
+      "prioridad": 3,
+      "deteccion": {
+        "regex": "(?i)(lo quiero|quiero (comprar|uno|el producto|adquirirlo)|compro|pedido|env[ií]amelo|hag[aá]mosle|s[ií] deseo|deseo adquirirlo|me interesa|dame uno|quiero comprar)",
+        "palabras_clave": ["quiero", "comprar", "pedido", "enviamelo", "lo quiero"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/captura_datos_intro", "/captura_datos_lista"],
+        "siguientes": ["/captura_datos_intro", "/captura_datos_lista"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": true
+      },
+      "notas": "Después de esto, el sistema debe capturar datos gradualmente"
+    },
+
+    "ofrecer_promos": {
+      "id": "ofrecer_promos",
+      "nombre": "Ofrecer Promociones",
+      "descripcion": "Mostrar promociones cuando datos están completos",
+      "prioridad": 4,
+      "deteccion": {
+        "automatico": true,
+        "condicion": "Todos los datos capturados (nombre, apellido, telefono, direccion, barrio, departamento, ciudad, correo)",
+        "descripcion": "No se detecta por regex, se dispara automáticamente"
+      },
+      "respuesta": {
+        "primera_vez": ["/plantilla_promociones"],
+        "siguientes": ["/plantilla_promociones"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false,
+        "usa_plantilla_callbell": true
+      }
+    },
+
+    "resumen_y_confirmacion": {
+      "id": "resumen_y_confirmacion",
+      "nombre": "Resumen y Confirmación",
+      "descripcion": "Cliente eligió pack, mostrar resumen",
+      "prioridad": 5,
+      "deteccion": {
+        "automatico": true,
+        "condicion": "captured_data.pack_elegido está definido",
+        "descripcion": "Se dispara cuando cliente elige 1x, 2x o 3x"
+      },
+      "respuesta": {
+        "1x": ["/pedido_1x", "/confirmar_compra"],
+        "2x": ["/pedido_2x", "/confirmar_compra"],
+        "3x": ["/pedido_3x", "/confirmar_compra"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "compra_confirmada": {
+      "id": "compra_confirmada",
+      "nombre": "Compra Confirmada",
+      "descripcion": "Cliente confirmó la compra",
+      "prioridad": 6,
+      "deteccion": {
+        "regex": "(?i)(^|\\s)(s[ií]|si|ok|okay|dale|confirmo|confirmar|acepto|de acuerdo|listo)(\\s|$|\\!)",
+        "palabras_clave": ["si", "ok", "confirmo", "acepto", "dale"],
+        "contexto": "Después de pregunta '¿Deseas confirmar tu compra?'"
+      },
+      "respuesta": {
+        "primera_vez": ["/compra_confirmada_1", "/compra_confirmada_2"],
+        "siguientes": ["/compra_confirmada_1", "/compra_confirmada_2"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false,
+        "cierra_sesion": true,
+        "crea_pedido": true
+      }
+    },
+
+    "no_confirmado": {
+      "id": "no_confirmado",
+      "nombre": "No Confirma Compra",
+      "descripcion": "Cliente no confirma o duda en confirmación final",
+      "prioridad": 6,
+      "deteccion": {
+        "regex": "(?i)(^|\\s)(no|nop|nope|despu[eé]s|luego|d[eé]jame pensar|no estoy seguro|tal vez|quiz[aá]s|no s[eé])(\\s|$)",
+        "palabras_clave": ["no", "despues", "luego", "dejame pensar"],
+        "contexto": "Después de pregunta '¿Deseas confirmar tu compra?'"
+      },
+      "respuesta": {
+        "primera_vez": ["/no_confirmado"],
+        "siguientes": ["/no_confirmado"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": true,
+        "captura_datos": false
+      }
+    },
+
+    "no_interesa": {
+      "id": "no_interesa",
+      "nombre": "No Le Interesa",
+      "descripcion": "Cliente dice que no le interesa o no lo quiere",
+      "prioridad": 5,
+      "deteccion": {
+        "regex": "(?i)(no me interesa|no lo quiero|no quiero|no gracias|no thank|no estoy interesado|no me sirve|no lo necesito|paso|no me convence)",
+        "palabras_clave": ["no me interesa", "no lo quiero", "no gracias", "paso"],
+        "contexto": "Durante la conversación, antes de llegar a confirmación de compra"
+      },
+      "respuesta": {
+        "primera_vez": ["/despueslopido"],
+        "siguientes": ["/despueslopido"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false,
+        "cierra_conversacion": true
+      }
+    },
+
+    "fallback": {
+      "id": "fallback",
+      "nombre": "Fallback a Humano",
+      "descripcion": "Pregunta fuera del protocolo o necesita humano",
+      "prioridad": 99,
+      "deteccion": {
+        "automatico": true,
+        "descripcion": "Cuando ningún otro intent hace match"
+      },
+      "respuesta": {
+        "primera_vez": ["/fallback"],
+        "siguientes": ["/fallback"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": true,
+        "captura_datos": false
+      }
+    }
+  },
+
+  "intents_combinados": {
+    "hola+precio": {
+      "descripcion": "Saludo + pregunta precio en mismo mensaje",
+      "deteccion": "Match 'hola' AND 'precio' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/precio", "/tiempoefecto1", "/modopago"],
+        "siguientes": ["/hola", "/precio", "/tiempoefecto2"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+como_se_toma": {
+      "descripcion": "Saludo + pregunta modo de uso",
+      "deteccion": "Match 'hola' AND 'como_se_toma' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/modouso", "/tiempoefecto1", "/tiempoefecto2"],
+        "siguientes": ["/hola", "/modouso", "/tiempoefecto2"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+envio": {
+      "descripcion": "Saludo + pregunta envío",
+      "deteccion": "Match 'hola' AND 'envio' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/envio", "/envio_empresas"],
+        "siguientes": ["/hola", "/envio"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+modopago": {
+      "descripcion": "Saludo + pregunta pago",
+      "deteccion": "Match 'hola' AND 'modopago' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/modopago"],
+        "siguientes": ["/hola", "/modopago"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+ubicacion": {
+      "descripcion": "Saludo + pregunta ubicación",
+      "deteccion": "Match 'hola' AND 'ubicacion' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/ubicacion", "/modopago"],
+        "siguientes": ["/hola", "/ubicacion"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+captura_datos_si_compra": {
+      "descripcion": "Saludo + intención de compra en mismo mensaje",
+      "deteccion": "Match 'hola' AND 'captura_datos_si_compra' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/captura_datos_intro", "/captura_datos_lista"],
+        "siguientes": ["/hola", "/captura_datos_intro", "/captura_datos_lista"]
+      },
+      "prioridad": 1
+    }
+  },
+
+  "reglas_deteccion": {
+    "orden_evaluacion": [
+      "Primero: Detectar si hay saludo + otra intención",
+      "Segundo: Detectar intenciones automáticas (ofrecer_promos, resumen, confirmacion)",
+      "Tercero: Detectar intenciones específicas por regex (precio, como_se_toma, etc)",
+      "Cuarto: Si no match → fallback"
+    ],
+
+    "primera_pregunta": {
+      "criterio": "Contar número de preguntas (excluyendo saludos simples) en historial",
+      "implementacion": "Si preguntas_usuario <= 1 → usar 'primera_vez', sino → 'siguientes'",
+      "excluir_del_conteo": ["hola", "buenas", "buenos dias", "saludos"]
+    },
+
+    "contexto_previo": {
+      "descripcion": "Usar último intent para determinar contexto",
+      "ejemplos": {
+        "ultimo_intent_resumen_y_confirmacion": "Si cliente dice 'si' → compra_confirmada",
+        "ultimo_intent_ofrecer_promos": "Si cliente dice '2' → resumen pack 2x"
+      }
+    }
+  }
+}
