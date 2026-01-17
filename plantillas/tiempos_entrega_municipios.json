@@ -1,0 +1,142 @@
+{
+  "Bucaramanga": {
+    "dias_min": 1,
+    "dias_max": 2,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Floridablanca": {
+    "dias_min": 1,
+    "dias_max": 2,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Girón": {
+    "dias_min": 1,
+    "dias_max": 3,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Piedecuesta": {
+    "dias_min": 2,
+    "dias_max": 3,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Lebrija": {
+    "dias_min": 2,
+    "dias_max": 4,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Rionegro": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Bogotá": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Medellín": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Cali": {
+    "dias_min": 4,
+    "dias_max": 6,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Barranquilla": {
+    "dias_min": 4,
+    "dias_max": 7,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Cartagena": {
+    "dias_min": 5,
+    "dias_max": 8,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Cúcuta": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Pereira": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Santa Marta": {
+    "dias_min": 5,
+    "dias_max": 8,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Ibagué": {
+    "dias_min": 4,
+    "dias_max": 6,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Pasto": {
+    "dias_min": 5,
+    "dias_max": 8,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Manizales": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Villavicencio": {
+    "dias_min": 4,
+    "dias_max": 6,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Armenia": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Neiva": {
+    "dias_min": 4,
+    "dias_max": 6,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Popayán": {
+    "dias_min": 4,
+    "dias_max": 6,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Valledupar": {
+    "dias_min": 4,
+    "dias_max": 7,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Montería": {
+    "dias_min": 4,
+    "dias_max": 7,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Sincelejo": {
+    "dias_min": 5,
+    "dias_max": 8,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Tunja": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Duitama": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "Sogamoso": {
+    "dias_min": 3,
+    "dias_max": 5,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  },
+  "default": {
+    "dias_min": 5,
+    "dias_max": 10,
+    "mensaje": "Tu pedido llega entre {dia_min} y {dia_max}"
+  }
+}
