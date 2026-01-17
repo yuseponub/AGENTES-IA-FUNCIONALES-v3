@@ -1,0 +1,1037 @@
+{
+  "name": "Agente Historial v3",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "historial-v3-callbell-webhook",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "f8abd962-670e-47de-9473-e542e05b1513",
+      "name": "Webhook Callbell",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -18096,
+        -1360
+      ],
+      "webhookId": "historial-v3-callbell-webhook"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"success\": true, \"message\": \"Message received\" } }}",
+        "options": {}
+      },
+      "id": "8777e3cc-b62f-48c6-ad9f-af7a441d88f2",
+      "name": "Respond Immediately",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -17888,
+        -1360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Parse Callbell webhook payload                                                                                                                                                                                                           \n  const body = $json.body || $json;                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // 🆕 SOPORTE PARA FORMATO REAL DE CALLBELL                                                                                                                                                                                                 \n  // Callbell envía: { event: \"message_created\", payload: { ... } }                                                                                                                                                                           \n  const isCallbellFormat = body.event && body.payload;                                                                                                                                                                                        \n  const message = isCallbellFormat ? body.payload : body;                                                                                                                                                                                     \n                                                                                                                                                                                                                                              \n  // Extraer datos del mensaje                                                                                                                                                                                                                \n  const uuid = message.uuid || message.message?.uuid || '';                                                                                                                                                                                   \n  const from = message.from || message.message?.from || '';                                                                                                                                                                                   \n  const to = message.to || message.message?.to || '';                                                                                                                                                                                         \n  const text = message.text || message.message?.text || message.content?.text || '';                                                                                                                                                          \n  const status = message.status || message.message?.status || 'unknown';                                                                                                                                                                      \n  const createdAt = message.createdAt || message.message?.createdAt || Date.now();                                                                                                                                                            \n                                                                                                                                                                                                                                              \n  // 🆕 Extraer tags del contacto (desde Callbell)                                                                                                                                                                                            \n  const tags = message.contact?.tags || message.tags || [];                                                                                                                                                                                   \n                                                                                                                                                                                                                                              \n  // 🆕 Extraer contact_id (UUID del contacto en Callbell)                                                                                                                                                                                    \n  const contactId = message.contact?.uuid || '';                                                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  // 🆕 Extraer conversationHref (Link de la conversación en Callbell)                                                                                                                                                                        \n  const conversationHref = message.contact?.conversationHref || '';                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // Determinar dirección                                                                                                                                                                                                                     \n  const direction = from === '573105879824' ? 'outbound' : 'inbound';                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // Normalizar phone                                                                                                                                                                                                                         \n  let phone = direction === 'inbound' ? from : to;                                                                                                                                                                                            \n  phone = phone.replace(/[^0-9]/g, '');                                                                                                                                                                                                       \n  if (phone.startsWith('57')) {                                                                                                                                                                                                               \n    phone = phone;                                                                                                                                                                                                                            \n  } else if (phone.startsWith('3')) {                                                                                                                                                                                                         \n    phone = '57' + phone;                                                                                                                                                                                                                     \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('📥 WEBHOOK RECEIVED:', {                                                                                                                                                                                                       \n    format: isCallbellFormat ? 'callbell' : 'test',                                                                                                                                                                                           \n    uuid,                                                                                                                                                                                                                                     \n    phone,                                                                                                                                                                                                                                    \n    direction,                                                                                                                                                                                                                                \n    text: text.substring(0, 50),                                                                                                                                                                                                              \n    tags: tags,                                                                                                                                                                                                                               \n    contact_id: contactId,                                                                                                                                                                                                                    \n    conversation_href: conversationHref                                                                                                                                                                                                       \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    callbell_message_id: uuid,                                                                                                                                                                                                                \n    phone,                                                                                                                                                                                                                                    \n    contact_id: contactId,                                                                                                                                                                                                                    \n    conversation_href: conversationHref,                                                                                                                                                                                                      \n    direction,                                                                                                                                                                                                                                \n    content: text,                                                                                                                                                                                                                            \n    status,                                                                                                                                                                                                                                   \n    tags: tags,                                                                                                                                                                                                                               \n    created_at: new Date(createdAt).toISOString()                                                                                                                                                                                             \n  };"
+      },
+      "id": "852c47e1-0727-42c6-bd75-7d1e14d20ac6",
+      "name": "Parse Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17664,
+        -1360
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT session_id, state, contact_id, tags, mode FROM sessions_v3 WHERE phone = '{{ $json.phone }}' LIMIT 1",
+        "options": {}
+      },
+      "id": "940fe676-6121-48b8-916d-4bea2221460c",
+      "name": "Find Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -16976,
+        -1360
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "session-exists-check",
+              "leftValue": "={{ $json.session_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "6e49bcd6-9630-4ced-bb7f-85b77f3fece5",
+      "name": "Check Session Exists",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -16752,
+        -1360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Session exists - merge data\n  const session = $json;\n  const parsePayload = $node['Parse Payload'].json;\n\n  // 🆕 Priorizar tags nuevos de Callbell\n  const newTags = parsePayload.tags || [];\n  const finalTags = newTags.length > 0 ? newTags : (session.tags || []);\n\n  console.log('✅ Session exists:', session.session_id);\n  console.log('🏷️ Tags - Old:', session.tags, 'New:', newTags, 'Final:', finalTags);\n\n  return {\n    session_id: session.session_id,\n    phone: parsePayload.phone,\n    contact_id: session.contact_id || '',\n    state: session.state || {},\n    tags: finalTags,\n    mode: session.mode || 'conversacion',\n    message: {\n      callbell_message_id: parsePayload.callbell_message_id,  // ✅ CAMBIO AQUÍ\n      content: parsePayload.content,\n      direction: parsePayload.direction,\n      created_at: parsePayload.created_at\n    }\n  };"
+      },
+      "id": "4aa0c47f-3116-4ab0-a90a-c53f84a20791",
+      "name": "Merge Existing Session",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16544,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Session doesn't exist - create new                                                                                                                                                                                                       \n  const parsePayload = $node['Parse Payload'].json;                                                                                                                                                                                           \n  const sessionId = `session_${parsePayload.phone}_${Date.now()}`;                                                                                                                                                                            \n                                                                                                                                                                                                                                              \n  // 🆕 Usar tags del webhook                                                                                                                                                                                                                 \n  const newTags = parsePayload.tags || [];                                                                                                                                                                                                    \n                                                                                                                                                                                                                                              \n  console.log('🆕 Creating new session:', sessionId);                                                                                                                                                                                         \n  console.log('🏷️ Initial tags:', newTags);                                                                                                                                                                                                   \n  console.log('🔗 Conversation href:', parsePayload.conversation_href);                                                                                                                                                                       \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    session_id: sessionId,                                                                                                                                                                                                                    \n    phone: parsePayload.phone,                                                                                                                                                                                                                \n    contact_id: parsePayload.contact_id || '',                                                                                                                                                                                                \n    callbell_conversation_href: parsePayload.conversation_href || '',  // ⬅️ CAMBIO: columna directa, no en state                                                                                                                             \n    state: {},  // ⬅️ CAMBIO: state vacío                                                                                                                                                                                                     \n    tags: newTags,                                                                                                                                                                                                                            \n    mode: 'conversacion',                                                                                                                                                                                                                     \n    message: {                                                                                                                                                                                                                                \n      callbell_message_id: parsePayload.callbell_message_id,                                                                                                                                                                                  \n      content: parsePayload.content,                                                                                                                                                                                                          \n      direction: parsePayload.direction,                                                                                                                                                                                                      \n      created_at: parsePayload.created_at                                                                                                                                                                                                     \n    }                                                                                                                                                                                                                                         \n  };"
+      },
+      "id": "4ed604ff-8b33-44c0-9ff4-ba6bca3a3a84",
+      "name": "Create New Session ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16544,
+        -1248
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO sessions_v3 (                                                                                                                                                                                                                   \n    session_id,                                                                                                                                                                                                                               \n    phone,                                                                                                                                                                                                                                    \n    contact_id,                                                                                                                                                                                                                               \n    callbell_conversation_href,                                                                                                                                                                                                               \n    state,                                                                                                                                                                                                                                    \n    tags,                                                                                                                                                                                                                                     \n    mode,                                                                                                                                                                                                                                     \n    status,                                                                                                                                                                                                                                   \n    created_at,                                                                                                                                                                                                                               \n    last_activity                                                                                                                                                                                                                             \n  )                                                                                                                                                                                                                                           \n  VALUES (                                                                                                                                                                                                                                    \n    '{{ $json.session_id }}',                                                                                                                                                                                                                 \n    '{{ $json.phone }}',                                                                                                                                                                                                                      \n    '{{ $json.contact_id || \"\" }}',                                                                                                                                                                                                           \n    '{{ $json.callbell_conversation_href || \"\" }}',                                                                                                                                                                                           \n    '{{ JSON.stringify($json.state) }}'::jsonb,                                                                                                                                                                                               \n    '{{ $json.tags && $json.tags.length > 0 ? \"{\\\"\" + $json.tags.join(\"\\\",\\\"\") + \"\\\"}\" : \"{}\" }}'::text[],                                                                                                                                    \n    '{{ $json.mode }}',                                                                                                                                                                                                                       \n    'active',                                                                                                                                                                                                                                 \n    NOW(),                                                                                                                                                                                                                                    \n    NOW()                                                                                                                                                                                                                                     \n  )                                                                                                                                                                                                                                           \n  RETURNING *",
+        "options": {}
+      },
+      "id": "67cc5b97-98e3-4cd1-a293-d5564955beab",
+      "name": "Insert/Update Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -16336,
+        -1248
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  INSERT INTO messages_v3 (session_id, role, content, direction, callbell_message_id, business_id, payload_raw, created_at)\n  VALUES (\n    '{{ $json.session_id }}',\n    '{{ $json.message.direction === \"inbound\" ? \"user\" : \"assistant\" }}',\n    '{{ $json.message.content }}',\n    '{{ $json.message.direction }}',\n    '{{ $json.message.callbell_message_id }}',\n    'somnio',\n    '{}'::jsonb,\n    '{{ $json.message.created_at }}'::timestamp\n  )\n  ON CONFLICT (callbell_message_id) DO NOTHING\n  RETURNING id",
+        "options": {}
+      },
+      "id": "894947a1-659f-411e-ba3e-49ec57467d24",
+      "name": "Insert Message",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -15888,
+        -1360
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "direction-check",
+              "leftValue": "={{ $node['Parse Payload'].json.direction }}",
+              "rightValue": "inbound",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7ea66797-29b2-44e7-a70e-c0e8449daaad",
+      "name": "Check Direction (Inbound?)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -15680,
+        -1248
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.automatizacionesmorf.com/webhook/state-analyzer",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n    \"phone\": $node['Format Snapshot for State Analyzer'].json.phone,\n    \"historial\": $node['Format Snapshot for State Analyzer'].json.messages || [],\n    \"pending_messages\": $node['Format Snapshot for State Analyzer'].json.pending || [],\n    \"captured_data\": $node['Format Snapshot for State Analyzer'].json.state || {},\n    \"intents_vistos\": $node['Format Snapshot for State Analyzer'].json.intents_vistos || []\n  } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "20524bd3-65e8-4896-883e-279cf4c9fe89",
+      "name": "Call State Analyzer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -15072,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "mode-check",
+              "leftValue": "={{ $json.mode }}",
+              "rightValue": "collecting_data",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "77448f07-17ef-40b6-ac22-596c3d6e00ab",
+      "name": "Check Mode (collecting_data?)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -14656,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.automatizacionesmorf.com/webhook/data-extractor",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n    \"phone\": $node['Parse Payload'].json.phone,\n    \"last_message\": $node['Parse Payload'].json.content,\n    \"captured_data\": $node['Update Session with State Analyzer Results'].json.captured_data || {}\n  } }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "284170df-e607-47c8-b095-9dadfebdbc66",
+      "name": "Call Data Extractor Simple",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -14448,
+        -1648
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Merge State Analyzer + Data Extractor results\n  const dataExtractor = $json; // Ahora viene directamente de \"Call Data Extractor\"\n  const stateAnalyzer = $node['Call State Analyzer'].json;\n\n  // Obtener datos de sesión desde nodos previos disponibles\n  let sessionData = {};\n  let sessionId = '';\n\n  // Intentar desde diferentes nodos\n  try {\n    const insertUpdate = $node['Insert/Update Session'];\n    if (insertUpdate && insertUpdate.json) {\n      sessionData = insertUpdate.json;\n      sessionId = insertUpdate.json.session_id;\n    }\n  } catch (e) {\n    // No existe\n  }\n\n  try {\n    const mergeExisting = $node['Merge Existing Session'];\n    if (mergeExisting && mergeExisting.json) {\n      sessionData = mergeExisting.json;\n      sessionId = mergeExisting.json.session_id;\n    }\n  } catch (e) {\n    // No existe\n  }\n\n  // Obtener phone\n  const parsePayload = $node['Parse Payload'].json;\n  const phone = parsePayload.phone;\n\n  console.log('🔄 MERGING DATA...');\n  console.log('State Analyzer:', stateAnalyzer);\n  console.log('Data Extractor:', dataExtractor);\n  console.log('Session ID:', sessionId);\n\n  // Merge state: datos anteriores + datos nuevos de Data Extractor\n  const mergedState = {\n    ...(sessionData.state || {}),\n    ...(dataExtractor.captured_data || {}),\n    pack: stateAnalyzer.pack_detectado || (sessionData.state?.pack) || null,\n    _last_intent: stateAnalyzer.intent,\n    _last_mode: stateAnalyzer.new_mode || sessionData.mode,\n    _intents_vistos: dataExtractor.captured_data?._intents_vistos || stateAnalyzer.captured_data?._intents_vistos || []\n  };\n\n  // Verificar campos mínimos necesarios\n  const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n  const camposMinimosCompletos = minimumFields.every(f =>\n    mergedState[f] && String(mergedState[f]).trim() !== ''\n  );\n\n  console.log('📊 MERGED STATE:', {\n    phone: phone,\n    mode: sessionData.mode,\n    intent: stateAnalyzer.intent,\n    pack: mergedState.pack,\n    campos_completos: camposMinimosCompletos,\n    order_created: mergedState.order_created || false\n  });\n\n  return {\n    phone: phone,\n    session_id: sessionId,\n    captured_data: mergedState,\n    intent: stateAnalyzer.intent,\n    pack_detectado: stateAnalyzer.pack_detectado,\n    campos_minimos_completos: camposMinimosCompletos,\n    order_created: mergedState.order_created || false\n  };"
+      },
+      "id": "f8b7670a-325f-401a-b1e7-4adc849c022f",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14224,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE sessions_v3\n  SET state = '{{ JSON.stringify($json.captured_data) }}'::jsonb,\n      mode = '{{ $json.final_mode }}',\n      last_activity = NOW()\n  WHERE phone = '{{ $json.phone }}'\n  RETURNING *",
+        "options": {}
+      },
+      "id": "4b3abe36-e763-42f7-b758-5773ff6035ba",
+      "name": "Update State in PostgreSQL",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -13792,
+        -1456
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "pack-check",
+              "leftValue": "={{ $node['Merge Data'].json.pack_detectado }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            },
+            {
+              "id": "campos-check",
+              "leftValue": "={{ $node['Merge Data'].json.campos_minimos_completos }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "order-check",
+              "leftValue": "={{ $node['Merge Data'].json.order_created }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "181099ca-f7a1-4390-a25a-a63f8cd0ed5a",
+      "name": "Should Create Order?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -13584,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/order-manager",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"phone\": $node['Should Create Order?'].json.phone,\n  \"captured_data\": $node['Should Create Order?'].json.state,\n  \"callbell_conversation_href\": $node['Should Create Order?'].json.callbell_conversation_href,\n  \"source\": \"historial_v3\"\n} }}",
+        "options": {
+          "timeout": 190000
+        }
+      },
+      "id": "4d4f594b-6c21-4d1e-aa05-2f614b617702",
+      "name": "Call Order Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -13104,
+        -1696
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Log order creation result                                                                                                                                                                                                                \n  const orderResult = $json;                                                                                                                                                                                                                  \n  const shouldCreateOrder = $node['Should Create Order?'].json; // ⬅️ CAMBIO AQUÍ                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  console.log('📦 ORDER CREATED:', {                                                                                                                                                                                                          \n    success: orderResult.success,                                                                                                                                                                                                             \n    order_name: orderResult.data?.ordenName || orderResult.order_name,                                                                                                                                                                        \n    phone: shouldCreateOrder.phone                                                                                                                                                                                                            \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // Update order_created flag in state                                                                                                                                                                                                       \n  const updatedState = {                                                                                                                                                                                                                      \n    ...shouldCreateOrder.state, // ⬅️ CAMBIO AQUÍ (usar state, no merged_state)                                                                                                                                                               \n    order_created: true,                                                                                                                                                                                                                      \n    order_name: orderResult.data?.ordenName || orderResult.order_name,                                                                                                                                                                        \n    order_created_at: new Date().toISOString()                                                                                                                                                                                                \n  };                                                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    phone: shouldCreateOrder.phone,                                                                                                                                                                                                           \n    order_created: true,                                                                                                                                                                                                                      \n    updated_state: updatedState                                                                                                                                                                                                               \n  };"
+      },
+      "id": "287c6bde-bfb0-43ed-b657-e794c718b844",
+      "name": "Log Order Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12864,
+        -1808
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "                                                                                                                                                                                                                                              \n  UPDATE sessions_v3                                                                                                                                                                                                                          \n  SET state = '{{ JSON.stringify($json.updated_state) }}'::jsonb                                                                                                                                                                              \n  WHERE phone = '{{ $json.phone }}'                                                                                                                                                                                                           \n  RETURNING *",
+        "options": {}
+      },
+      "id": "02651f29-99e3-46a7-90e1-e7cb8a26769a",
+      "name": "Update Order Created Flag",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -12704,
+        -1808
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.automatizacionesmorf.com/webhook/carolina-v3-process",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"phone\": $node['Merge Data'].json.phone\n} }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "142bb0e1-ea1a-48cf-a626-e1217b0cc00d",
+      "name": "Trigger Carolina v3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -13168,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log outbound message (skip processing)\nconst parsePayload = $node['Parse Payload'].json;\n\nconsole.log('⬅️ OUTBOUND MESSAGE - Skip processing:', {\n  phone: parsePayload.phone,\n  content: parsePayload.content.substring(0, 50)\n});\n\nreturn {\n  skipped: true,\n  reason: 'outbound_message',\n  phone: parsePayload.phone\n};"
+      },
+      "id": "e96a6a13-a196-4b52-924a-63f14ffb94b4",
+      "name": "Log Outbound Skip",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -14752,
+        -1216
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  -- Borrar mensajes\n  DELETE FROM messages_v3\n  WHERE session_id IN (\n    SELECT session_id FROM sessions_v3\n    WHERE phone = '573137549286'\n  );\n\n  -- Borrar sesión\n  DELETE FROM sessions_v3\n  WHERE phone = '573137549286';\n\n  -- Verificar\n  SELECT\n    (SELECT COUNT(*) FROM sessions_v3 WHERE phone = '573137549286') as sesiones,\n    (SELECT COUNT(*) FROM messages_v3 WHERE session_id IN (\n      SELECT session_id FROM sessions_v3 WHERE phone = '573137549286'\n    )) as mensajes;",
+        "options": {}
+      },
+      "id": "d4bdb283-6d51-46f4-9c1d-d9bec738acb4",
+      "name": "eliminar temporal",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -13360,
+        -1248
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Preservar datos del mensaje después de insertar sesión\n  const sessionFromDB = $json;\n  const originalData = $node['Create New Session ID'].json;\n\n  console.log('📦 Preserving message data after session insert');\n\n  return {\n    session_id: sessionFromDB.session_id,\n    phone: sessionFromDB.phone,\n    contact_id: sessionFromDB.contact_id || sessionFromDB.callbell_contact_id || '',\n    state: sessionFromDB.state || sessionFromDB.captured_data || {},\n    tags: sessionFromDB.tags || [],\n    mode: sessionFromDB.mode || 'conversacion',\n    message: originalData.message  // ✅ Recuperar el objeto message\n  };"
+      },
+      "id": "dc8050a4-a732-4a21-ab24-d03f922dc431",
+      "name": "Preserve Message Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16128,
+        -1248
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Formatear snapshot para State Analyzer\n  const parsePayload = $node['Parse Payload'].json;\n  const messagesFromDB = $input.all().map(item => item.json);\n\n  const phone = parsePayload.phone;\n  const messages = messagesFromDB.map(m => ({\n    id: m.id,\n    role: m.role,\n    content: m.content,\n    direction: m.direction,\n    created_at: m.created_at\n  }));\n\n  // Calcular pending: mensajes inbound después del último outbound\n  let lastOutboundIdx = -1;\n  for (let i = messages.length - 1; i >= 0; i--) {\n    if (messages[i].direction === 'outbound') {\n      lastOutboundIdx = i;\n      break;\n    }\n  }\n\n  const pending = messages.slice(lastOutboundIdx + 1).filter(m => m.direction === 'inbound');\n\n  const state = messagesFromDB[0]?.captured_data || {};\n  const intents_vistos = state._intents_vistos || [];\n\n  console.log('📸 Snapshot built:', {\n    phone,\n    messages_count: messages.length,\n    pending_count: pending.length\n  });\n\n  return {\n    phone,\n    messages,\n    pending,\n    state,\n    intents_vistos\n  };"
+      },
+      "id": "997ca57d-2bde-49f3-853c-8c1c91e35b81",
+      "name": "Format Snapshot for State Analyzer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -15264,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  SELECT\n    m.id,\n    m.role,\n    m.content,\n    m.direction,\n    m.created_at,\n    s.session_id,\n    s.phone,\n    s.state as captured_data\n  FROM messages_v3 m\n  JOIN sessions_v3 s ON m.session_id = s.session_id\n  WHERE s.phone = '{{ $node[\"Parse Payload\"].json.phone }}'\n  ORDER BY m.created_at ASC",
+        "options": {}
+      },
+      "id": "1391b0d2-0578-40e1-9eee-ec7ad28cdb26",
+      "name": "Get Messages for Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -15440,
+        -1456
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Check if all fields are complete to exit collecting_data mode\n  const mergedData = $json; // Viene de Merge Data\n  const capturedData = mergedData.captured_data || {};\n  const stateAnalyzerIntent = mergedData.intent || 'fallback';\n\n  console.log('🔍 CHECKING FIELDS COMPLETION...');\n  console.log('Captured data:', capturedData);\n\n  // Campos mínimos necesarios para ofrecer promos (sin correo y barrio)\n  const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'departamento', 'ciudad'];\n  const minimumFieldsComplete = minimumFields.every(field => {\n    const value = capturedData[field];\n    return value && String(value).trim() !== '';\n  });\n\n  // Todos los campos (incluyendo correo y barrio)\n  const allFields = ['nombre', 'apellido', 'telefono', 'direccion', 'barrio', 'departamento', 'ciudad', 'correo'];\n  const allFieldsComplete = allFields.every(field => {\n    const value = capturedData[field];\n    return value && String(value).trim() !== '';\n  });\n\n  console.log('Minimum fields complete:', minimumFieldsComplete);\n  console.log('All fields complete:', allFieldsComplete);\n\n  let finalMode = 'collecting_data';\n  let finalIntent = stateAnalyzerIntent;\n  const pack = capturedData.pack || null;\n\n  // Lógica de cambio de modo e intent\n  if (allFieldsComplete) {\n    // Todos los 8 campos completos → cambiar a conversacion\n    finalMode = 'conversacion';\n    console.log('✅ All 8 fields complete! Switching to conversacion mode');\n  } else if (minimumFieldsComplete && !pack) {\n    // Campos mínimos completos pero no todos, y sin pack → ofrecer promos\n    finalIntent = 'ofrecer_promos';\n    finalMode = 'collecting_data'; // Mantener collecting_data para seguir capturando correo/barrio\n    console.log('✅ Minimum fields complete! Changing intent to ofrecer_promos');\n  } else {\n    const missingMinimum = minimumFields.filter(f => !capturedData[f] || String(capturedData[f]).trim() === '');\n    console.log('⏳ Missing minimum fields:', missingMinimum);\n  }\n\n  // CRÍTICO: Actualizar el intent dentro de captured_data para que se guarde en PostgreSQL\n  const updatedCapturedData = {\n    ...capturedData,\n    _last_intent: finalIntent\n  };\n\n  return {\n    ...mergedData,\n    captured_data: updatedCapturedData,\n    final_mode: finalMode,\n    intent: finalIntent,\n    all_fields_complete: allFieldsComplete,\n    minimum_fields_complete: minimumFieldsComplete\n  };"
+      },
+      "id": "285b2941-6eb2-40f7-b31c-1f1c0bc02ded",
+      "name": "Check if All Fields Complete",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -13984,
+        -1456
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE sessions_v3\n  SET\n    state = COALESCE(\n      state::jsonb || '{{ JSON.stringify($json.captured_data) }}'::jsonb,\n      '{{ JSON.stringify($json.captured_data) }}'::jsonb\n    ),\n    mode = COALESCE(NULLIF('{{ $json.new_mode }}', 'null'), mode),\n    last_activity = NOW()\n  WHERE phone = '{{ $json.phone }}'\n  RETURNING *",
+        "options": {}
+      },
+      "id": "47f89b21-b2c9-42b1-874f-c2dae3dee8c6",
+      "name": "Update Session with State Analyzer Results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -14880,
+        -1456
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Verificar tags bloqueados y mensajes duplicados                                                                                                                                                                                          \n  const payload = $json;                                                                                                                                                                                                                      \n  const tags = payload.tags || [];                                                                                                                                                                                                            \n  const callbellMessageId = payload.callbell_message_id;                                                                                                                                                                                      \n  const createdAt = payload.created_at;                                                                                                                                                                                                       \n                                                                                                                                                                                                                                              \n  // 1. VERIFICAR TAGS BLOQUEADOS                                                                                                                                                                                                             \n  const blockedTags = ['WPP', 'P/W', 'RECO', 'bot_off'];                                                                                                                                                                                      \n  const hasBlockedTag = tags.some(tag => blockedTags.includes(tag));                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  console.log('🏷️ CHECKING TAGS:', {                                                                                                                                                                                                          \n    phone: payload.phone,                                                                                                                                                                                                                     \n    tags: tags,                                                                                                                                                                                                                               \n    hasBlockedTag: hasBlockedTag                                                                                                                                                                                                              \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // 2. VERIFICAR SI ES MENSAJE ANTIGUO (más de 2 minutos)                                                                                                                                                                                    \n  const messageTimestamp = new Date(createdAt).getTime();                                                                                                                                                                                     \n  const now = Date.now();                                                                                                                                                                                                                     \n  const ageInSeconds = (now - messageTimestamp) / 1000;                                                                                                                                                                                       \n  const isOldMessage = ageInSeconds > 120; // Más de 2 minutos                                                                                                                                                                                \n                                                                                                                                                                                                                                              \n  console.log('⏰ CHECKING MESSAGE AGE:', {                                                                                                                                                                                                   \n    phone: payload.phone,                                                                                                                                                                                                                     \n    age_seconds: ageInSeconds.toFixed(1),                                                                                                                                                                                                     \n    is_old: isOldMessage                                                                                                                                                                                                                      \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // 3. VERIFICAR SI YA EXISTE EN BD (duplicado)                                                                                                                                                                                              \n  // Esto se verificará en el siguiente nodo con una query                                                                                                                                                                                    \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    ...payload,                                                                                                                                                                                                                               \n    has_blocked_tag: hasBlockedTag,                                                                                                                                                                                                           \n    is_old_message: isOldMessage,                                                                                                                                                                                                             \n    message_age_seconds: ageInSeconds,                                                                                                                                                                                                        \n    should_block: hasBlockedTag || isOldMessage                                                                                                                                                                                               \n  };"
+      },
+      "id": "c3f6f203-5c21-4631-bdb8-2dfcd77cf5eb",
+      "name": "Check Blocked Tags and Duplicates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -17472,
+        -1360
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": ""
+          },
+          "conditions": [
+            {
+              "id": "direction-check",
+              "leftValue": "={{ $json.should_block }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "5c974c68-8efb-4874-a93f-2b2cbc950e92",
+      "name": "IF: Should Block Message?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -17264,
+        -1360
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Log mensaje bloqueado                                                                                                                                                                                                                    \n  const payload = $json;                                                                                                                                                                                                                      \n                                                                                                                                                                                                                                              \n  let reason = '';                                                                                                                                                                                                                            \n  if (payload.has_blocked_tag) {                                                                                                                                                                                                              \n    reason = `Tags bloqueados: ${payload.tags.join(', ')}`;                                                                                                                                                                                   \n  } else if (payload.is_old_message) {                                                                                                                                                                                                        \n    reason = `Mensaje antiguo: ${payload.message_age_seconds.toFixed(1)}s`;                                                                                                                                                                   \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('🚫 MESSAGE BLOCKED:', {                                                                                                                                                                                                        \n    phone: payload.phone,                                                                                                                                                                                                                     \n    reason: reason,                                                                                                                                                                                                                           \n    content: payload.content.substring(0, 50)                                                                                                                                                                                                 \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    blocked: true,                                                                                                                                                                                                                            \n    reason: reason,                                                                                                                                                                                                                           \n    phone: payload.phone                                                                                                                                                                                                                      \n  };"
+      },
+      "id": "f1a89144-3c7f-49ec-801d-3b97dcc2ee2c",
+      "name": "Log Blocked Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -16976,
+        -1168
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://n8n.automatizacionesmorf.com/webhook/carolina-v3-process",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"phone\": $node['Merge Data'].json.phone\n} }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "12f36fff-eaf4-4bee-84d4-b5c1082829c8",
+      "name": "Trigger Carolina v",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -13280,
+        -1696
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.callbell.eu/v1/contacts/{{ $json.contact_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=  {                                                                                                                                                                                                                                           \n    \"name\": \"{{ $json.name }}\",                                                                                                                                                                       \n    \"tags\": [\"WPP\", \"RB\"],                                                                                                                                                                                                                    \n    \"custom_fields\": {                                                                                                                                                                                                                         \n      \"bigin orden\": \"{{ $json.orderUrl }}\"                                                                                                                                                                \n    }                                                                                                                                                                                                                                         \n  }",
+        "options": {}
+      },
+      "id": "096eb367-b4b3-4cdd-933e-2cdfd23da896",
+      "name": "HTTP: Add RB Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -12672,
+        -1600
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // FORZAR lectura del nodo Call Order Manager (no usar $json)                                                                                                                                                                               \n  let orderData = $node['Call Order Manager'].json;                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // Si es un array, tomar el primer elemento                                                                                                                                                                                                 \n  if (Array.isArray(orderData)) {                                                                                                                                                                                                             \n    orderData = orderData[0];                                                                                                                                                                                                                 \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  const shouldCreate = $node['Should Create Order?'].json;                                                                                                                                                                                    \n                                                                                                                                                                                                                                              \n  console.log('=== DEBUG - VERIFICANDO FUENTE DE DATOS ===');                                                                                                                                                                                 \n  console.log('Datos de Call Order Manager:', JSON.stringify(orderData, null, 2));                                                                                                                                                            \n  console.log('Order URL extraída:', orderData?.bigin_response?.data?.orderUrl);                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  // Extraer datos de la estructura correcta                                                                                                                                                                                                  \n  let ordenName = '';                                                                                                                                                                                                                         \n  let orderUrl = '';                                                                                                                                                                                                                          \n  let orderId = '';                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  if (orderData.bigin_response?.data) {                                                                                                                                                                                                       \n    ordenName = orderData.bigin_response.data.ordenName;                                                                                                                                                                                      \n    orderUrl = orderData.bigin_response.data.orderUrl;                                                                                                                                                                                        \n    orderId = orderData.bigin_response.data.orderId;                                                                                                                                                                                          \n  } else if (orderData.data) {                                                                                                                                                                                                                \n    ordenName = orderData.data.ordenName;                                                                                                                                                                                                     \n    orderUrl = orderData.data.orderUrl;                                                                                                                                                                                                       \n    orderId = orderData.data.orderId;                                                                                                                                                                                                         \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // Fallback al state si no hay ordenName                                                                                                                                                                                                    \n  if (!ordenName && shouldCreate.state) {                                                                                                                                                                                                     \n    ordenName = `${shouldCreate.state.nombre || ''} ${shouldCreate.state.apellido || ''}`.trim();                                                                                                                                             \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('=== DATOS FINALES A ENVIAR ===');                                                                                                                                                                                              \n  console.log('ordenName:', ordenName);                                                                                                                                                                                                       \n  console.log('orderUrl:', orderUrl);                                                                                                                                                                                                         \n  console.log('orderId:', orderId);                                                                                                                                                                                                           \n  console.log('contact_id:', shouldCreate.contact_id);                                                                                                                                                                                        \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    contact_id: shouldCreate.contact_id,                                                                                                                                                                                                      \n    phone: shouldCreate.phone,                                                                                                                                                                                                                \n    name: ordenName || 'Sin nombre',                                                                                                                                                                                                          \n    orderUrl: orderUrl || '',                                                                                                                                                                                                                 \n    orderId: orderId || '',                                                                                                                                                                                                                   \n    tags: [\"WPP\", \"RB\"]                                                                                                                                                                                                                       \n  };"
+      },
+      "id": "cdbb5261-54c6-4157-81a2-fcfa450852d3",
+      "name": "Arreglar Callbell",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -12864,
+        -1600
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook Callbell": {
+      "main": [
+        [
+          {
+            "node": "Respond Immediately",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Respond Immediately": {
+      "main": [
+        [
+          {
+            "node": "Parse Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Payload": {
+      "main": [
+        [
+          {
+            "node": "Check Blocked Tags and Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Session": {
+      "main": [
+        [
+          {
+            "node": "Check Session Exists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Session Exists": {
+      "main": [
+        [
+          {
+            "node": "Merge Existing Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create New Session ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Existing Session": {
+      "main": [
+        [
+          {
+            "node": "Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create New Session ID": {
+      "main": [
+        [
+          {
+            "node": "Insert/Update Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert/Update Session": {
+      "main": [
+        [
+          {
+            "node": "Preserve Message Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Message": {
+      "main": [
+        [
+          {
+            "node": "Check Direction (Inbound?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Direction (Inbound?)": {
+      "main": [
+        [
+          {
+            "node": "Get Messages for Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Outbound Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call State Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Update Session with State Analyzer Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Mode (collecting_data?)": {
+      "main": [
+        [
+          {
+            "node": "Call Data Extractor Simple",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Data Extractor Simple": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Check if All Fields Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update State in PostgreSQL": {
+      "main": [
+        [
+          {
+            "node": "Should Create Order?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should Create Order?": {
+      "main": [
+        [
+          {
+            "node": "Trigger Carolina v",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Carolina v3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Order Manager": {
+      "main": [
+        [
+          {
+            "node": "Log Order Created",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Arreglar Callbell",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Order Created": {
+      "main": [
+        [
+          {
+            "node": "Update Order Created Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Created Flag": {
+      "main": [
+        []
+      ]
+    },
+    "Preserve Message Data": {
+      "main": [
+        [
+          {
+            "node": "Insert Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Snapshot for State Analyzer": {
+      "main": [
+        [
+          {
+            "node": "Call State Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Messages for Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Format Snapshot for State Analyzer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if All Fields Complete": {
+      "main": [
+        [
+          {
+            "node": "Update State in PostgreSQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Session with State Analyzer Results": {
+      "main": [
+        [
+          {
+            "node": "Check Mode (collecting_data?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Blocked Tags and Duplicates": {
+      "main": [
+        [
+          {
+            "node": "IF: Should Block Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Should Block Message?": {
+      "main": [
+        [
+          {
+            "node": "Find Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Blocked Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Carolina v": {
+      "main": [
+        [
+          {
+            "node": "Call Order Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Add RB Tag": {
+      "main": [
+        []
+      ]
+    },
+    "Arreglar Callbell": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Add RB Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "e9c97e6b-5f3a-456a-b907-5397621ce094",
+  "meta": {
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "Tl861BrueCD2jvxF",
+  "tags": []
+}
