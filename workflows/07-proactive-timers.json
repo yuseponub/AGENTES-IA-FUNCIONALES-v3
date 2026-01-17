@@ -1,0 +1,430 @@
+{
+  "name": "Proactive Timers Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "* * * * *"
+            }
+          ]
+        }
+      },
+      "id": "0aa2cbb6-62a5-4462-adcf-c5219ff8982b",
+      "name": "Schedule Trigger (Every Minute)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -2848,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n      session_id,\n      phone,\n      mode,\n      captured_data,\n      last_activity,\n      created_at\n    FROM sessions_v3\n    WHERE\n      status = 'active'\n      AND (\n        mode = 'collecting_data'\n        OR mode = 'ofrecer_promos'\n        OR mode = 'bot_active'\n      )\n      AND last_activity > NOW() - INTERVAL '15 minutes'\n    ORDER BY last_activity DESC",
+        "options": {}
+      },
+      "id": "50c428ff-5109-4faa-b514-a6c0b32f4c9a",
+      "name": "Query Active Sessions",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -2608,
+        1104
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "e693ead7-1140-4ccb-be87-e9ef24afb23e",
+              "leftValue": "={{ $json.length }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f5a0d259-dc85-4b55-8be5-e825e3a26fec",
+      "name": "IF: Any Sessions?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2368,
+        1104
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Query PostgreSQL for sessions that need timer actions\n// Returns sessions that need:\n// 1. Data collection reminder (6 min)\n// 2. Order creation without promo (10 min)\n\nconst sessions = $json;\n\nconsole.log('⏱️  CHECKING SESSIONS FOR TIMER ACTIONS...');\nconsole.log('Total sessions found:', sessions.length);\n\nconst now = new Date();\nconst results = {\n  data_reminders: [],\n  pending_orders: []\n};\n\nsessions.forEach(session => {\n  const state = session.captured_data || {};\n  const mode = session.mode;\n  const lastActivity = new Date(session.last_activity);\n  const minutesSinceActivity = (now - lastActivity) / (1000 * 60);\n\n  console.log(`\\n📊 Session ${session.phone}:`);\n  console.log(`  Mode: ${mode}`);\n  console.log(`  Minutes since activity: ${minutesSinceActivity.toFixed(2)}`);\n\n  // Check for data collection reminder (6 min)\n  if (mode === 'collecting_data') {\n    const reminderSent = state.reminder_sent || false;\n\n    if (minutesSinceActivity >= 6 && !reminderSent) {\n      console.log('  → Needs data collection reminder');\n      results.data_reminders.push({\n        phone: session.phone,\n        session_id: session.session_id,\n        captured_data: state,\n        minutes_elapsed: minutesSinceActivity\n      });\n    }\n  }\n\n  // Check for pending order creation (10 min)\n  if (mode === 'ofrecer_promos' || mode === 'bot_active') {\n    // Check if all minimum fields are complete\n    const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n    const allMinimumComplete = minimumFields.every(f => state[f] && state[f].trim() !== '');\n\n    // Check if promo is selected\n    const hasPromo = state.promo && state.promo !== 'WPP' && state.promo.trim() !== '';\n\n    // Check if order was already created\n    const orderCreated = state.order_created || false;\n\n    if (allMinimumComplete && !hasPromo && !orderCreated) {\n      // Has complete data but no promo selected\n      if (minutesSinceActivity >= 10) {\n        console.log('  → Needs order creation without promo');\n        results.pending_orders.push({\n          phone: session.phone,\n          session_id: session.session_id,\n          captured_data: state,\n          minutes_elapsed: minutesSinceActivity\n        });\n      }\n    }\n  }\n});\n\nconsole.log(`\\n📈 SUMMARY:`);\nconsole.log(`  Data reminders to send: ${results.data_reminders.length}`);\nconsole.log(`  Pending orders to create: ${results.pending_orders.length}`);\n\nreturn results;\n"
+      },
+      "id": "e84eb4b0-e7c7-4eea-abea-cec29ad01575",
+      "name": "Analyze Sessions for Timers",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2128,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare actions for both data reminders and pending orders\n// Outputs arrays ready for processing in loops\n\nconst data = $json;\n\nconsole.log('📝 PREPARING TIMER ACTIONS...');\n\nconst actions = {\n  data_reminders: [],\n  pending_orders: []\n};\n\n// Prepare data collection reminders\nif (data.data_reminders && data.data_reminders.length > 0) {\n  console.log(`\\n📬 Preparing ${data.data_reminders.length} data reminders...`);\n\n  data.data_reminders.forEach(session => {\n    const state = session.captured_data || {};\n    const allFields = ['nombre', 'apellido', 'telefono', 'direccion', 'barrio', 'departamento', 'ciudad', 'correo'];\n    const missingFields = allFields.filter(f => !state[f] || state[f] === '');\n\n    // Field names in Spanish for message\n    const fieldNames = {\n      'nombre': 'nombre completo',\n      'apellido': 'apellido',\n      'telefono': 'número de teléfono',\n      'direccion': 'dirección completa',\n      'barrio': 'barrio',\n      'ciudad': 'ciudad o municipio',\n      'departamento': 'departamento',\n      'correo': 'correo electrónico'\n    };\n\n    // Generate friendly message\n    let message = '¡Hola! 👋\\n\\n';\n    message += 'Para completar tu pedido, necesitamos los siguientes datos:\\n\\n';\n    missingFields.forEach((field, index) => {\n      message += `${index + 1}. ${fieldNames[field]}\\n`;\n    });\n    message += '\\nPor favor envíalos para continuar con tu orden. ¡Gracias! 😊';\n\n    actions.data_reminders.push({\n      phone: session.phone,\n      session_id: session.session_id,\n      message: message,\n      missing_fields: missingFields,\n      action_type: 'data_reminder'\n    });\n  });\n}\n\n// Prepare pending order creations\nif (data.pending_orders && data.pending_orders.length > 0) {\n  console.log(`\\n📦 Preparing ${data.pending_orders.length} pending orders...`);\n\n  data.pending_orders.forEach(session => {\n    const state = session.captured_data || {};\n\n    // Generate order name\n    const ordenName = `${state.nombre} ${state.apellido} - WPP`.trim();\n\n    // Get today's date in DD/MM/YYYY format\n    const today = new Date();\n    const closingDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;\n\n    // Prepare order body for Bigin\n    const orderBody = {\n      ordenName: ordenName,\n      stage: 'Nuevo Ingreso',\n      closingDate: closingDate,\n      amount: 0, // No amount if no promo\n      telefono: state.telefono,\n      direccion: state.direccion,\n      municipio: state.ciudad,\n      departamento: state.departamento,\n      email: state.correo || '',\n      description: 'WPP' // WPP = WhatsApp without promo (incomplete)\n    };\n\n    actions.pending_orders.push({\n      phone: session.phone,\n      session_id: session.session_id,\n      order_body: orderBody,\n      captured_data: state,\n      action_type: 'create_order'\n    });\n  });\n}\n\nconsole.log(`\\n✅ ACTIONS PREPARED:`);\nconsole.log(`  Data reminders: ${actions.data_reminders.length}`);\nconsole.log(`  Pending orders: ${actions.pending_orders.length}`);\n\nreturn actions;\n"
+      },
+      "id": "f981ecc4-bb66-4559-ba93-9ebfbe75d166",
+      "name": "Prepare Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1888,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "97b5ce71-4dea-4f8a-8a24-5c274220e773",
+      "name": "Split Into Branches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1648,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "b37d72db-043b-404a-aa65-3d8afa14ef0b",
+      "name": "Loop: Data Reminders",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1408,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $json.data_reminders[0];\nif (!item) {\n  return null;\n}\n\nreturn {\n  phone: item.phone,\n  callbell_body: {\n    to: item.phone,\n    from: \"whatsapp\",\n    type: \"text\",\n    content: {\n      text: item.message\n    }\n  },\n  session_id: item.session_id\n};"
+      },
+      "id": "e5a726f6-7fc8-4bf1-9be3-dd1e73860d1d",
+      "name": "Prepare Callbell Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.callbell_body) }}",
+        "options": {}
+      },
+      "id": "2cadb777-d1bb-49a1-ad72-ddb01078b45f",
+      "name": "Send Reminder to Callbell",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -928,
+        896
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o7MjFlWPCOrkcPYR",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE sessions_v3\nSET captured_data = jsonb_set(\n  COALESCE(captured_data, '{}'::jsonb),\n  '{reminder_sent}',\n  'true'::jsonb\n)\nWHERE phone = '{{ $json.phone }}'",
+        "options": {}
+      },
+      "id": "86a64aa8-78ce-4eed-87be-4dc517a4da7c",
+      "name": "Mark Reminder Sent",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -688,
+        896
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "9b58a674-afba-46e0-b03b-a6f244bf8deb",
+      "name": "Loop: Pending Orders",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -1408,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare body for Order Manager webhook\nconst item = $json.pending_orders[0];\nif (!item) {\n  return null;\n}\n\nconsole.log('📤 Preparing Order Manager body for:', item.phone);\n\n// Prepare body for Order Manager with promo override \"WPP\"\nconst orderManagerBody = {\n  phone: item.phone,\n  captured_data: item.captured_data,\n  promo_override: \"WPP\",  // Force WPP promo (no promo selected)\n  source: \"proactive_timers\"\n};\n\nreturn {\n  phone: item.phone,\n  session_id: item.session_id,\n  order_manager_body: orderManagerBody\n};"
+      },
+      "id": "c58baf97-445e-4952-be0d-0f23ebea17ff",
+      "name": "Prepare Order Manager Body",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1168,
+        1136
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/order-manager",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.order_manager_body }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "c591ed4c-a343-468a-9473-fefe189c5d43",
+      "name": "Call Order Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -928,
+        1136
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "fa5bb6d4-9a5f-40ad-b293-0bac59fa7698",
+      "name": "No Sessions - Skip",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -2128,
+        1184
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger (Every Minute)": {
+      "main": [
+        [
+          {
+            "node": "Query Active Sessions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Active Sessions": {
+      "main": [
+        [
+          {
+            "node": "IF: Any Sessions?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Any Sessions?": {
+      "main": [
+        [
+          {
+            "node": "Analyze Sessions for Timers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Sessions - Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Sessions for Timers": {
+      "main": [
+        [
+          {
+            "node": "Prepare Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Actions": {
+      "main": [
+        [
+          {
+            "node": "Split Into Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Into Branches": {
+      "main": [
+        [
+          {
+            "node": "Loop: Data Reminders",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Loop: Pending Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop: Data Reminders": {
+      "main": [
+        [
+          {
+            "node": "Prepare Callbell Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Callbell Message": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder to Callbell",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder to Callbell": {
+      "main": [
+        [
+          {
+            "node": "Mark Reminder Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reminder Sent": {
+      "main": [
+        [
+          {
+            "node": "Loop: Data Reminders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop: Pending Orders": {
+      "main": [
+        [
+          {
+            "node": "Prepare Order Manager Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Order Manager Body": {
+      "main": [
+        [
+          {
+            "node": "Call Order Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Order Manager": {
+      "main": [
+        [
+          {
+            "node": "Loop: Pending Orders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "63d84fd4-b727-4810-9dd3-8ae9e875532c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "ZxcjHwnBkMGb0fCL",
+  "tags": []
+}

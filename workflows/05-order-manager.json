@@ -1,0 +1,257 @@
+{
+  "name": "Order Manager",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "order-manager",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9383eabf-4f3a-4ffc-8548-5e54d01f8f34",
+      "name": "Webhook: Order Manager",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -2496,
+        256
+      ],
+      "webhookId": "order-manager"
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Parse incoming request from multiple sources                                                                                                                                                                                             \n  const body = $json.body || $json;                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('📥 ORDER MANAGER TRIGGERED');                                                                                                                                                                                                  \n  console.log('Source:', body.source || 'unknown');                                                                                                                                                                                           \n  console.log('Phone:', body.phone);                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  // Extract data                                                                                                                                                                                                                             \n  const phone = body.phone;                                                                                                                                                                                                                   \n  const capturedData = body.captured_data || {};                                                                                                                                                                                              \n  const promoOverride = body.promo_override || null; // Force specific promo (e.g., \"WPP\")                                                                                                                                                    \n  const source = body.source || 'unknown';                                                                                                                                                                                                    \n  const callbellConversationHref = body.callbell_conversation_href || ''; // ⬅️ NUEVO                                                                                                                                                         \n  const contactId = body.contact_id || ''; // ⬅️ NUEVO                                                                                                                                                                                        \n                                                                                                                                                                                                                                              \n  // Determine promo: override takes priority, then captured_data.pack                                                                                                                                                                        \n  let promo = promoOverride || capturedData.pack || null;                                                                                                                                                                                     \n                                                                                                                                                                                                                                              \n  console.log('Captured data fields:', Object.keys(capturedData));                                                                                                                                                                            \n  console.log('Promo detected:', promo);                                                                                                                                                                                                      \n  console.log('Callbell conversation:', callbellConversationHref); // ⬅️ NUEVO                                                                                                                                                                \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    phone,                                                                                                                                                                                                                                    \n    captured_data: capturedData,                                                                                                                                                                                                              \n    promo,                                                                                                                                                                                                                                    \n    source,                                                                                                                                                                                                                                   \n    promo_override: promoOverride,                                                                                                                                                                                                            \n    callbell_conversation_href: callbellConversationHref, // ⬅️ NUEVO                                                                                                                                                                         \n    contact_id: contactId // ⬅️ NUEVO                                                                                                                                                                                                         \n  };"
+      },
+      "id": "4662b4d9-1850-4013-9145-6cba21f29ff2",
+      "name": "Parse Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2256,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validate that minimum required fields are complete\nconst data = $json;\nconst capturedData = data.captured_data || {};\n\nconsole.log('✅ VALIDATING DATA FOR ORDER...');\n\n// Minimum required fields to create an order\nconst minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n\n// Check completeness\nconst missingFields = minimumFields.filter(f => !capturedData[f] || capturedData[f].trim() === '');\n\nconst isValid = missingFields.length === 0;\n\nconsole.log('Minimum fields complete:', isValid);\nif (!isValid) {\n  console.log('Missing fields:', missingFields);\n}\n\nreturn {\n  ...data,\n  is_valid: isValid,\n  missing_fields: missingFields,\n  validation_passed: isValid\n};"
+      },
+      "id": "36152830-7537-4bfe-8741-01220a535829",
+      "name": "Validate Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2016,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "46165933-840d-4a16-92b3-323d7358838f",
+              "leftValue": "={{ $json.is_valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c672270d-76a2-4f17-bc21-fb2ebd2d69dc",
+      "name": "IF: Valid Data?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -1776,
+        256
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Prepare order body for Bigin CRM                                                                                                                                                                                                         \n  const data = $json;                                                                                                                                                                                                                         \n  const captured = data.captured_data || {};                                                                                                                                                                                                  \n  const promo = data.promo || 'WPP';                                                                                                                                                                                                          \n  const callbellHref = data.callbell_conversation_href || ''; // ⬅️ NUEVO                                                                                                                                                                     \n                                                                                                                                                                                                                                              \n  console.log('📦 PREPARING BIGIN ORDER...');                                                                                                                                                                                                 \n  console.log('Promo:', promo);                                                                                                                                                                                                               \n  console.log('Callbell link:', callbellHref); // ⬅️ NUEVO                                                                                                                                                                                    \n                                                                                                                                                                                                                                              \n  // Promo amounts mapping (PRECIOS CORRECTOS del protocolo)                                                                                                                                                                                  \n  const promoAmounts = {                                                                                                                                                                                                                      \n    '1x': 77900,    // ✅ Precio correcto                                                                                                                                                                                                     \n    '1X': 77900,                                                                                                                                                                                                                              \n    '2x': 109900,   // ✅ Precio correcto                                                                                                                                                                                                     \n    '2X': 109900,                                                                                                                                                                                                                             \n    '3x': 139900,   // ✅ Precio correcto                                                                                                                                                                                                     \n    '3X': 139900,                                                                                                                                                                                                                             \n    'WPP': 0        // No promo selected                                                                                                                                                                                                      \n  };                                                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  // Normalize promo to uppercase                                                                                                                                                                                                             \n  const promoNormalized = promo.toUpperCase();                                                                                                                                                                                                \n  const amount = promoAmounts[promoNormalized] || 0;                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  // Generate order name: SOLO \"Nombre Apellido\" (sin promo)                                                                                                                                                                                  \n  const ordenName = `${captured.nombre} ${captured.apellido}`.trim();                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // Get today's date in DD/MM/YYYY format                                                                                                                                                                                                    \n  const today = new Date();                                                                                                                                                                                                                   \n  const closingDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;                                                                                                  \n                                                                                                                                                                                                                                              \n  // Prepare order body for Bigin                                                                                                                                                                                                             \n  const orderBody = {                                                                                                                                                                                                                         \n    ordenName: ordenName,                                                                                                                                                                                                                     \n    stage: 'Nuevo Ingreso',                                                                                                                                                                                                                   \n    closingDate: closingDate,                                                                                                                                                                                                                 \n    amount: amount,                                                                                                                                                                                                                           \n    telefono: captured.telefono,                                                                                                                                                                                                              \n    direccion: captured.direccion,                                                                                                                                                                                                            \n    municipio: captured.ciudad,                                                                                                                                                                                                               \n    departamento: captured.departamento,                                                                                                                                                                                                      \n    email: captured.correo || '',                                                                                                                                                                                                             \n    description: 'WPP',  // ✅ Siempre WPP - la promo está implícita en el precio                                                                                                                                                             \n    callBell: callbellHref // ⬅️ NUEVO: Link de la conversación de Callbell                                                                                                                                                                   \n  };                                                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  console.log('Order prepared:', JSON.stringify(orderBody, null, 2));                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    ...data,                                                                                                                                                                                                                                  \n    order_body: orderBody,                                                                                                                                                                                                                    \n    order_name: ordenName,                                                                                                                                                                                                                    \n    amount: amount                                                                                                                                                                                                                            \n  };"
+      },
+      "id": "9d3138a9-ebe8-4663-9ca7-ba4a21afa655",
+      "name": "Prepare Bigin Order",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1536,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://robot-api.local:3000/bigin/create-order",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json.order_body }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "8281f008-fb7e-4dcb-a289-a73ead903ac2",
+      "name": "Create Order in Bigin",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1296,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE sessions_v3                                                                                                                                                                                                                          \n  SET state = jsonb_set(                                                                                                                                                                                                                      \n    jsonb_set(                                                                                                                                                                                                                                \n      COALESCE(state, captured_data, '{}'::jsonb),                                                                                                                                                                                            \n      '{order_created}',                                                                                                                                                                                                                      \n      'true'::jsonb                                                                                                                                                                                                                           \n    ),                                                                                                                                                                                                                                        \n    '{order_created_at}',                                                                                                                                                                                                                     \n    to_jsonb(NOW()::text)                                                                                                                                                                                                                     \n  )                                                                                                                                                                                                                                           \n  WHERE phone = '{{ $node[\"Parse Request\"].json.phone }}' AND status = 'active'                                                                                                                                                               \n  RETURNING *",
+        "options": {}
+      },
+      "id": "2fdbc450-10ef-4dda-bf62-aedb6941cfc3",
+      "name": "Mark Order Created",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -1056,
+        -80
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: true,\n  order_created: true,\n  order_name: $json.order_name,\n  phone: $json.phone,\n  amount: $json.amount,\n  source: $json.source,\n  bigin_response: $json\n} }}",
+        "options": {}
+      },
+      "id": "1283603a-547c-485a-9860-4c17a76dd4ad",
+      "name": "Return Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1040,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  success: false,\n  order_created: false,\n  error: 'Invalid data: missing required fields',\n  missing_fields: $json.missing_fields,\n  phone: $json.phone\n} }}",
+        "options": {}
+      },
+      "id": "53976c65-e8df-4806-b262-ea74384164b2",
+      "name": "Return Error",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -1536,
+        368
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: Order Manager": {
+      "main": [
+        [
+          {
+            "node": "Parse Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Request": {
+      "main": [
+        [
+          {
+            "node": "Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Data": {
+      "main": [
+        [
+          {
+            "node": "IF: Valid Data?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Valid Data?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Bigin Order",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Bigin Order": {
+      "main": [
+        [
+          {
+            "node": "Create Order in Bigin",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Order in Bigin": {
+      "main": [
+        [
+          {
+            "node": "Return Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Order Created": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "177881ed-26f2-41cc-b106-e70db2f1d594",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "xDIH3SY4M1gQIIms",
+  "tags": []
+}

@@ -1,0 +1,264 @@
+{
+  "name": "Snapshot Historial v3 Endpoint DSL",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "historial-v3-snapshot",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "37c9aa77-964a-4b2f-8f18-c9cf71c99707",
+      "name": "Webhook: Snapshot",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        112
+      ],
+      "webhookId": "historial-v3-snapshot"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse query parameter\nconst phone = $json.query.phone || '';\n\nif (!phone) {\n  throw new Error('Phone parameter required');\n}\n\nconsole.log('📸 Snapshot requested for phone:', phone);\n\nreturn { phone };"
+      },
+      "id": "0988302f-23be-4882-84a4-ba0756285d2d",
+      "name": "Parse Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -656,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  SELECT                                                                                                                                                                                                                                      \n    session_id,                                                                                                                                                                                                                               \n    phone,                                                                                                                                                                                                                                    \n    contact_id,  -- ✅ CAMBIO AQUÍ                                                                                                                                                                                                            \n    business_id,                                                                                                                                                                                                                              \n    status,                                                                                                                                                                                                                                   \n    state as captured_data,                                                                                                                                                                                                                   \n    mode,                                                                                                                                                                                                                                     \n    tags,                                                                                                                                                                                                                                     \n    version,                                                                                                                                                                                                                                  \n    last_processed_at,                                                                                                                                                                                                                        \n    created_at,                                                                                                                                                                                                                               \n    last_activity                                                                                                                                                                                                                             \n  FROM sessions_v3                                                                                                                                                                                                                            \n  WHERE phone = '{{ $json.phone }}'                                                                                                                                                                                                           \n    AND status = 'active'                                                                                                                                                                                                                     \n  ORDER BY last_activity DESC                                                                                                                                                                                                                 \n  LIMIT 1",
+        "options": {}
+      },
+      "id": "84572c27-b59a-40e4-afb9-93a00b46c7c3",
+      "name": "Get Session",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -448,
+        112
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "session-exists",
+              "leftValue": "={{ $json.session_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "4f081514-6bab-43fd-b994-781fc3152f67",
+      "name": "Session Exists?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -224,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  id,\n  session_id,\n  role,\n  content,\n  direction,\n  intent,\n  callbell_message_id,\n  created_at\nFROM messages_v3 \nWHERE session_id = '{{ $json.session_id }}'\nORDER BY created_at ASC \nLIMIT 100",
+        "options": {}
+      },
+      "id": "9434491b-f18b-489a-8c75-1db75d676599",
+      "name": "Get Messages",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        0,
+        0
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Compute snapshot with all messages and pending calculation\nconst sessionData = $node['Get Session'].json;\nconst allMessages = $input.all();\nconst parsePhone = $node['Parse Phone'].json;\n\n// Verificar si la sesión existe\nif (!sessionData || !sessionData.session_id) {\n  console.log('❌ Session not found for phone:', parsePhone.phone);\n  return {\n    success: false,\n    error: 'Session not found',\n    phone: parsePhone.phone,\n    messages: [],\n    pending: [],\n    pending_count: 0\n  };\n}\n\nconst messages = allMessages.map(m => ({\n  id: m.json.id,\n  role: m.json.role,\n  content: m.json.content,\n  direction: m.json.direction,\n  intent: m.json.intent,\n  created_at: m.json.created_at\n}));\n\n// Calcular pending: mensajes inbound después del último outbound\nlet lastOutboundIdx = -1;\nfor (let i = messages.length - 1; i >= 0; i--) {\n  if (messages[i].direction === 'outbound') {\n    lastOutboundIdx = i;\n    break;\n  }\n}\n\nconst pending = [];\nfor (let i = lastOutboundIdx + 1; i < messages.length; i++) {\n  if (messages[i].direction === 'inbound') {\n    pending.push(messages[i]);\n  }\n}\n\nconst lastOutboundAt = lastOutboundIdx >= 0 ? messages[lastOutboundIdx].created_at : null;\n\nconsole.log('📸 Snapshot computed:', {\n  phone: sessionData.phone,\n  session_id: sessionData.session_id,\n  messages_count: messages.length,\n  pending_count: pending.length\n});\n\nreturn {\n  success: true,\n  version: sessionData.version,\n  session_id: sessionData.session_id,\n  phone: sessionData.phone,\n  contact_id: sessionData.contact_id || '',\n  business_id: sessionData.business_id,\n  state: sessionData.captured_data || {},\n  mode: sessionData.mode || 'conversacion',\n  tags: sessionData.tags || [],\n  messages,\n  pending,\n  pending_count: pending.length,\n  last_outbound_at: lastOutboundAt,\n  last_processed_at: sessionData.last_processed_at\n};"
+      },
+      "id": "d6036a1d-1b6d-401b-b768-b05e840fa480",
+      "name": "Compute Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "9ebfd617-9a11-4701-a524-b3168435a03f",
+      "name": "Respond with Snapshot",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        448,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Session not found - return empty snapshot\nconst parsePhone = $node['Parse Phone'].json;\n\nconsole.log('⚠️ Session not found for phone:', parsePhone.phone);\n\nreturn {\n  success: false,\n  error: 'Session not found',\n  phone: parsePhone.phone,\n  messages: [],\n  pending: [],\n  pending_count: 0,\n  state: {},\n  mode: 'conversacion',\n  tags: []\n};"
+      },
+      "id": "873ab70b-36f4-4136-b6a2-fa51dc7c6a99",
+      "name": "No Session Found",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "a1392013-9bce-4529-aa6d-7bbc61537372",
+      "name": "Respond Empty",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        224,
+        208
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook: Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Parse Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Phone": {
+      "main": [
+        [
+          {
+            "node": "Get Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Session": {
+      "main": [
+        [
+          {
+            "node": "Session Exists?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Session Exists?": {
+      "main": [
+        [
+          {
+            "node": "Get Messages",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Session Found",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Messages": {
+      "main": [
+        [
+          {
+            "node": "Compute Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compute Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Respond with Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Session Found": {
+      "main": [
+        [
+          {
+            "node": "Respond Empty",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "380af449-0ca4-43e6-9050-f975c74ba20b",
+  "meta": {
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "JjFmu30rFGE2VSG4",
+  "tags": []
+}
