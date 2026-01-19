@@ -1,101 +1,147 @@
-# Bigin Robot - Automatización CRM
+# Bigin Robot v2 - Browser On-Demand
 
-Robot de automatización para Bigin CRM usando Playwright.
+Robot de automatización para Bigin CRM con arquitectura **browser on-demand**.
 
-## 📁 Estructura
+## Diferencias vs v1
+
+| Característica | v1 (Original) | v2 (Este) |
+|----------------|---------------|-----------|
+| Navegador | Siempre abierto 24/7 | Solo durante operación |
+| CPU idle | 30-60% | ~0% |
+| RAM idle | 300-500MB | ~50MB (solo Node) |
+| Sesiones | Manejo complejo de cookies | Sin sesiones (login cada vez) |
+| Código | ~1000 líneas | ~400 líneas |
+
+## Arquitectura
 
 ```
-bigin-robot/
-├── packages/
-│   ├── robot-base/      # Base framework para robots
-│   ├── robot-api/       # API REST del robot
-│   └── adapters/
-│       └── bigin/       # Adaptador específico para Bigin CRM
-├── storage/             # Almacenamiento de datos
-│   ├── sessions/        # Sesiones de navegador
-│   ├── artifacts/       # Screenshots y evidencias
-│   └── logs/           # Logs de operaciones
-└── robot-api-manager.sh # Script de gestión del robot
+Petición llega
+     │
+     ▼
+┌─────────────┐
+│ Crear       │
+│ Navegador   │  ← Solo cuando hay petición
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
+│ Login       │
+│ Bigin       │
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
+│ Ejecutar    │
+│ Operación   │
+└─────────────┘
+     │
+     ▼
+┌─────────────┐
+│ Cerrar      │
+│ Navegador   │  ← Libera recursos
+└─────────────┘
+     │
+     ▼
+Respuesta enviada
+(VPS libre hasta próxima petición)
 ```
 
-## 🚀 Instalación y Configuración
+## Instalación en VPS
 
-### 1. Instalar dependencias
+### 1. Subir archivos
 
 ```bash
-cd /root/v3dsl-bot/bigin-robot
-npm install
+cd /root
+git clone <tu-repo> bigin-robot-v2
+# O subir manualmente a /root/bigin-robot-v2
 ```
 
-### 2. Compilar TypeScript
+### 2. Instalar dependencias
+
+```bash
+cd /root/bigin-robot-v2
+npm install
+npx playwright install chromium
+npx playwright install-deps
+```
+
+### 3. Configurar variables
+
+```bash
+cp .env.example .env
+nano .env
+# Editar con tus credenciales de Bigin
+```
+
+### 4. Compilar
 
 ```bash
 npm run build
 ```
 
-### 3. Iniciar el robot
-
-#### Opción A: Usando el script de gestión (recomendado)
+### 5. Iniciar
 
 ```bash
-# Iniciar
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh start
-
-# Detener
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh stop
-
-# Reiniciar
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
-
-# Ver estado
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh status
-
-# Ver logs en tiempo real
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh logs
-
-# Recompilar código
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh build
+npm start
 ```
 
-#### Opción B: Usando systemd (inicio automático)
+## Ejecutar como servicio (systemd)
+
+### Crear servicio
 
 ```bash
-# Habilitar inicio automático
-sudo systemctl enable robot-api
-
-# Iniciar servicio
-sudo systemctl start robot-api
-
-# Ver estado
-sudo systemctl status robot-api
-
-# Ver logs
-journalctl -u robot-api -f
+sudo nano /etc/systemd/system/robot-api-v2.service
 ```
 
-#### Opción C: Manual
+```ini
+[Unit]
+Description=Bigin Robot API v2 (Browser On-Demand)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/bigin-robot-v2
+ExecStart=/usr/bin/node /root/bigin-robot-v2/dist/index.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+```
+
+### Activar servicio
 
 ```bash
-cd /root/v3dsl-bot/bigin-robot/packages/robot-api
-npm run start
+sudo systemctl daemon-reload
+sudo systemctl enable robot-api-v2
+sudo systemctl start robot-api-v2
+sudo systemctl status robot-api-v2
 ```
 
-## 📡 API Endpoints
+### Ver logs
 
-El robot expone una API REST en `http://localhost:3000`:
+```bash
+journalctl -u robot-api-v2 -f
+```
+
+## API Endpoints
 
 ### Health Check
+
 ```bash
 GET /health
 ```
 
-### Crear Orden en Bigin
+### Crear Orden
+
 ```bash
 POST /bigin/create-order
 Content-Type: application/json
 
 {
-  "ordenName": "Juan Perez",
+  "ordenName": "Orden Juan Perez",
   "stage": "Nuevo Ingreso",
   "amount": 109900,
   "telefono": "573137549286",
@@ -103,103 +149,62 @@ Content-Type: application/json
   "municipio": "Bucaramanga",
   "departamento": "Santander",
   "email": "juan@example.com",
+  "description": "WPP",
   "callBell": "https://dash.callbell.eu/chat/xxxxx"
 }
 ```
 
-## 🔄 Actualización del Robot
+## Migración desde v1
 
-Cuando hagas cambios en el código del robot en GitHub:
+Si tienes el robot v1 corriendo:
 
-1. **Pull los cambios:**
+1. **Detener v1:**
    ```bash
-   cd /root/v3dsl-bot
-   git pull origin master
+   systemctl stop robot-api
+   # o
+   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh stop
    ```
 
-2. **Recompilar y reiniciar:**
-   ```bash
-   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh build
-   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
-   ```
+2. **Instalar v2** (pasos arriba)
 
-## 📋 Características
+3. **Cambiar puerto si es necesario** (o usar el mismo 3000)
 
-- ✅ Creación automática de órdenes en Bigin CRM
-- ✅ Gestión de sesiones con timeout (30 minutos)
-- ✅ Auto-relogin cuando expira sesión
-- ✅ Retry automático con backoff exponencial
-- ✅ Screenshots de evidencia
-- ✅ Logs detallados de operaciones
-- ✅ Campo CallBell clickeable para WhatsApp
+4. **n8n no necesita cambios** - los endpoints son iguales
 
-## 🔧 Desarrollo
+## Troubleshooting
 
-### Estructura de paquetes
+### El robot tarda mucho
 
-El proyecto usa **npm workspaces** con 3 paquetes:
+Es normal que tarde 60-90 segundos porque:
+- Inicia navegador (~5s)
+- Login (~10-30s dependiendo de 2FA)
+- Navega y llena formulario (~30-45s)
+- Cierra navegador (~2s)
 
-1. **robot-base**: Framework base para crear robots
-2. **robot-api**: API REST que expone funcionalidad del robot
-3. **adapter-bigin**: Implementación específica para Bigin CRM
-
-### Scripts disponibles
+### Error de Playwright
 
 ```bash
-npm run build         # Compilar todos los paquetes
-npm run dev          # Modo desarrollo con watch
-npm run start        # Iniciar en producción
+# Reinstalar Playwright
+npx playwright install chromium
+npx playwright install-deps
 ```
 
-## 📝 Logs
+### Error de permisos
 
-Los logs se guardan en:
-- `/tmp/robot-api.log` - Log principal del robot
-- `storage/logs/` - Logs de operaciones específicas
-
-## 🔐 Seguridad
-
-- Las sesiones se guardan encriptadas en `storage/sessions/`
-- El robot valida automáticamente la sesión antes de cada operación
-- Timeout de 30 minutos de inactividad
-
-## 🐛 Troubleshooting
-
-### El robot no inicia
 ```bash
-# Verificar si el puerto 3000 está ocupado
-lsof -i :3000
-
-# Ver logs
-tail -f /tmp/robot-api.log
+chmod +x /root/bigin-robot-v2/dist/index.js
 ```
 
-### Error de sesión
-```bash
-# Eliminar sesiones antiguas
-rm -f /root/v3dsl-bot/bigin-robot/storage/sessions/*.json
+## Comparación de recursos
 
-# Reiniciar robot
-/root/v3dsl-bot/bigin-robot/robot-api-manager.sh restart
+### VPS con v1 (navegador 24/7)
+```
+CPU: 30-60% constante
+RAM: 500-800MB constante
 ```
 
-### Errores de compilación
-```bash
-# Limpiar y reinstalar
-cd /root/v3dsl-bot/bigin-robot
-rm -rf node_modules package-lock.json
-npm install
-npm run build
+### VPS con v2 (on-demand)
 ```
-
-## 🔗 Integración con n8n
-
-El robot se integra con n8n a través del workflow **05-order-manager.json** que envía peticiones HTTP a `http://robot-api.local:3000/bigin/create-order`.
-
-### Configuración DNS
-
-El robot es accesible desde contenedores Docker (n8n) mediante:
-- `http://robot-api.local:3000` (hostname configurado en Docker)
-- `http://localhost:3000` (desde el host)
-
-Las reglas de iptables están configuradas en `/etc/iptables-docker-robot.sh`.
+CPU: ~0% idle, pico durante operación
+RAM: ~50MB idle, pico ~400MB durante operación
+```
