@@ -1,210 +1,193 @@
-# Bigin Robot v2 - Browser On-Demand
+# 🤖 Modelo IA Distribuida - Robot Base + Bigin Adapter
 
-Robot de automatización para Bigin CRM con arquitectura **browser on-demand**.
+Sistema de robots que operan CRMs y plataformas logísticas.
 
-## Diferencias vs v1
-
-| Característica | v1 (Original) | v2 (Este) |
-|----------------|---------------|-----------|
-| Navegador | Siempre abierto 24/7 | Solo durante operación |
-| CPU idle | 30-60% | ~0% |
-| RAM idle | 300-500MB | ~50MB (solo Node) |
-| Sesiones | Manejo complejo de cookies | Sin sesiones (login cada vez) |
-| Código | ~1000 líneas | ~400 líneas |
-
-## Arquitectura
+## 📁 Estructura del Proyecto
 
 ```
-Petición llega
-     │
-     ▼
-┌─────────────┐
-│ Crear       │
-│ Navegador   │  ← Solo cuando hay petición
-└─────────────┘
-     │
-     ▼
-┌─────────────┐
-│ Login       │
-│ Bigin       │
-└─────────────┘
-     │
-     ▼
-┌─────────────┐
-│ Ejecutar    │
-│ Operación   │
-└─────────────┘
-     │
-     ▼
-┌─────────────┐
-│ Cerrar      │
-│ Navegador   │  ← Libera recursos
-└─────────────┘
-     │
-     ▼
-Respuesta enviada
-(VPS libre hasta próxima petición)
+modelo-ia-distribuida/
+├── packages/
+│   ├── robot-base/              # Core del robot (Playwright, screenshots, sessions)
+│   └── adapters/
+│       └── bigin/               # Adapter para Bigin CRM (Zoho) - TEMPORAL
+├── apps/
+│   └── orchestrator-api/        # API (próximo)
+└── storage/
+    ├── artifacts/               # Screenshots
+    ├── logs/                    # Logs
+    └── sessions/                # Cookies guardadas
 ```
 
-## Instalación en VPS
+## 🚀 Setup Rápido
 
-### 1. Subir archivos
+### 1. Instalar dependencias
 
 ```bash
-cd /root
-git clone <tu-repo> bigin-robot-v2
-# O subir manualmente a /root/bigin-robot-v2
-```
+cd /home/n8n-claude/proyectos/modelo-ia-distribuida
 
-### 2. Instalar dependencias
-
-```bash
-cd /root/bigin-robot-v2
+# Instalar root
 npm install
+
+# Instalar packages
+npm install --workspace=@modelo-ia/robot-base
+npm install --workspace=@modelo-ia/adapter-bigin
+
+# Instalar Playwright browsers
+cd packages/robot-base
 npx playwright install chromium
-npx playwright install-deps
+cd ../..
 ```
 
-### 3. Configurar variables
+### 2. Configurar credenciales
 
 ```bash
+# Copiar ejemplo
 cp .env.example .env
-nano .env
+
 # Editar con tus credenciales de Bigin
+nano .env
 ```
 
-### 4. Compilar
+**.env debe contener:**
+```
+BIGIN_URL=https://crm.zoho.com/crm/org123456/tab/Leads
+BIGIN_EMAIL=tu-email@example.com
+BIGIN_PASSWORD=tu-password
+
+STORAGE_PATH=/home/n8n-claude/proyectos/modelo-ia-distribuida/storage
+
+PLAYWRIGHT_HEADLESS=false
+PLAYWRIGHT_SLOW_MO=500
+
+LOG_LEVEL=debug
+```
+
+### 3. Build packages
 
 ```bash
 npm run build
 ```
 
-### 5. Iniciar
+### 4. Test login a Bigin
 
 ```bash
-npm start
+npm run test:login --workspace=@modelo-ia/adapter-bigin
 ```
 
-## Ejecutar como servicio (systemd)
+**Deberías ver:**
+- Browser abrirse
+- Login automático a Bigin
+- Screenshot guardado en `storage/artifacts/`
+- Mensaje: ✅ Login test passed!
 
-### Crear servicio
+---
 
+## 🧪 Tests Disponibles
+
+### Test Login (ya creado)
 ```bash
-sudo nano /etc/systemd/system/robot-api-v2.service
+npm run test:login --workspace=@modelo-ia/adapter-bigin
 ```
 
-```ini
-[Unit]
-Description=Bigin Robot API v2 (Browser On-Demand)
-After=network.target
+Verifica que el login funciona y guarda sesión.
 
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/root/bigin-robot-v2
-ExecStart=/usr/bin/node /root/bigin-robot-v2/dist/index.js
-Restart=on-failure
-RestartSec=10
-Environment=NODE_ENV=production
+---
 
-[Install]
-WantedBy=multi-user.target
+## 📚 Próximos Pasos
+
+### ✅ Completado:
+- [x] Robot Base (Playwright, screenshots, sessions)
+- [x] Bigin Adapter base
+- [x] Login funcional
+- [x] **🆕 Sistema de timeout de sesión (30 min)**
+- [x] **🆕 Verificación de ventanas cerradas**
+- [x] **🆕 Sistema de relogin automático mejorado**
+- [x] **🆕 Sistema de retry con backoff exponencial**
+- [x] **🆕 Notificaciones al equipo en caso de fallo**
+- [x] **🆕 Campo CallBell clickeable en órdenes**
+- [x] **🆕 Retorno de Order ID y URL**
+- [x] Tool: `find_lead`
+- [x] Tool: `add_note`
+- [x] Tool: `create_order` (completo con todas las funcionalidades)
+
+### 📋 Por hacer:
+- [ ] Implementar notificaciones reales (Slack, Email, WhatsApp)
+- [ ] Tool: `update_field`
+- [ ] Orchestrator API
+- [ ] Courier adapters
+- [ ] Playbooks end-to-end
+
+---
+
+## 🆕 Nuevas Funcionalidades (Enero 2026)
+
+**Ver documentación completa:** [`docs/NUEVAS-FUNCIONALIDADES.md`](docs/NUEVAS-FUNCIONALIDADES.md)
+
+### Resumen de Mejoras:
+
+1. **🕐 Timeout de Sesión (30 min)**: Gestión automática de sesiones con timeout de 30 minutos
+2. **🪟 Verificación de Ventanas**: Detección de ventanas cerradas o sesiones perdidas
+3. **🔄 Relogin Automático**: Sistema inteligente que garantiza sesión válida antes de operaciones
+4. **🔁 Retry con Backoff**: Reintento automático de operaciones fallidas (max 3 intentos: 1s, 2s, 4s)
+5. **🚨 Notificaciones**: Alertas al equipo cuando operaciones críticas fallan
+6. **🔗 Campo CallBell**: Link de conversación de Callbell en órdenes
+7. **🆔 Order ID/URL**: Retorno automático del ID y URL de órdenes creadas
+
+### Ejemplo de Uso:
+
+```typescript
+const result = await adapter.createOrder({
+  ordenName: 'Orden #12345',
+  telefono: '+573001234567',
+  callBell: 'https://dash.callbell.eu/chat/abc123', // ✅ Nuevo
+  // ...otros campos...
+});
+
+console.log('✅ Order ID:', result.orderId);
+console.log('🔗 Order URL:', result.orderUrl);
 ```
 
-### Activar servicio
+**Beneficios:**
+- ✅ Mayor confiabilidad con retry automático
+- ✅ No más sesiones expiradas
+- ✅ Recuperación automática de ventanas cerradas
+- ✅ Monitoreo proactivo con notificaciones
+- ✅ Trazabilidad completa con Order IDs
 
+---
+
+## 🐛 Troubleshooting
+
+### Error: "Playwright browser not found"
 ```bash
-sudo systemctl daemon-reload
-sudo systemctl enable robot-api-v2
-sudo systemctl start robot-api-v2
-sudo systemctl status robot-api-v2
-```
-
-### Ver logs
-
-```bash
-journalctl -u robot-api-v2 -f
-```
-
-## API Endpoints
-
-### Health Check
-
-```bash
-GET /health
-```
-
-### Crear Orden
-
-```bash
-POST /bigin/create-order
-Content-Type: application/json
-
-{
-  "ordenName": "Orden Juan Perez",
-  "stage": "Nuevo Ingreso",
-  "amount": 109900,
-  "telefono": "573137549286",
-  "direccion": "Calle 31 #39-15",
-  "municipio": "Bucaramanga",
-  "departamento": "Santander",
-  "email": "juan@example.com",
-  "description": "WPP",
-  "callBell": "https://dash.callbell.eu/chat/xxxxx"
-}
-```
-
-## Migración desde v1
-
-Si tienes el robot v1 corriendo:
-
-1. **Detener v1:**
-   ```bash
-   systemctl stop robot-api
-   # o
-   /root/v3dsl-bot/bigin-robot/robot-api-manager.sh stop
-   ```
-
-2. **Instalar v2** (pasos arriba)
-
-3. **Cambiar puerto si es necesario** (o usar el mismo 3000)
-
-4. **n8n no necesita cambios** - los endpoints son iguales
-
-## Troubleshooting
-
-### El robot tarda mucho
-
-Es normal que tarde 60-90 segundos porque:
-- Inicia navegador (~5s)
-- Login (~10-30s dependiendo de 2FA)
-- Navega y llena formulario (~30-45s)
-- Cierra navegador (~2s)
-
-### Error de Playwright
-
-```bash
-# Reinstalar Playwright
+cd packages/robot-base
 npx playwright install chromium
-npx playwright install-deps
 ```
 
-### Error de permisos
-
+### Error: "Cannot find module '@modelo-ia/robot-base'"
 ```bash
-chmod +x /root/bigin-robot-v2/dist/index.js
+npm run build
 ```
 
-## Comparación de recursos
+### Error: "Login failed"
+- Verifica que BIGIN_URL, BIGIN_EMAIL, BIGIN_PASSWORD son correctos
+- Verifica que no tienes 2FA activado en Bigin
+- Revisa screenshot en `storage/artifacts/error-*.png`
 
-### VPS con v1 (navegador 24/7)
-```
-CPU: 30-60% constante
-RAM: 500-800MB constante
+### Browser no se abre (headless mode)
+```bash
+# En .env, cambiar a:
+PLAYWRIGHT_HEADLESS=false
 ```
 
-### VPS con v2 (on-demand)
-```
-CPU: ~0% idle, pico durante operación
-RAM: ~50MB idle, pico ~400MB durante operación
-```
+---
+
+## 📝 Notas
+
+- **Bigin Adapter es TEMPORAL**: Lo usamos mientras el developer crea tu CRM propio
+- **Selectores pueden cambiar**: Si Zoho actualiza Bigin, necesitarás ajustar `bigin/src/selectors.ts`
+- **Sessions se guardan**: Después del primer login, usa cookies guardadas (no login cada vez)
+
+---
+
+**Siguiente:** Implementar `find_lead` tool para buscar leads en Bigin.

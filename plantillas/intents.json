@@ -28,16 +28,16 @@
     "precio": {
       "id": "precio",
       "nombre": "Consulta de Precio",
-      "descripcion": "Cliente pregunta por el precio del producto",
+      "descripcion": "Cliente pregunta por el precio del producto o pide información general",
       "prioridad": 2,
       "deteccion": {
-        "regex": "(?i)(precio|valor|vale|cu[aá]nto vale|cu[aá]nto cuesta|costo|cuanto es|cuanto sale)",
-        "palabras_clave": ["precio", "valor", "costo", "cuanto"],
+        "regex": "(?i)(precio|valor|vale|cu[aá]nto vale|cu[aá]nto cuesta|costo|cuanto es|cuanto sale|informaci[oó]n|info|dame m[aá]s info|quiero saber m[aá]s|m[aá]s informaci[oó]n del producto|cu[eé]ntame m[aá]s)",
+        "palabras_clave": ["precio", "valor", "costo", "cuanto", "informacion", "info", "saber mas"],
         "excluir_si_contiene": []
       },
       "respuesta": {
         "primera_vez": ["/precio", "/tiempoefecto1", "/modopago"],
-        "siguientes": ["/precio", "/tiempoefecto1", "/modopago"]
+        "siguientes": ["/precio", "/tiempoefecto2"]
       },
       "flags": {
         "needs_payment_link": false,
@@ -349,6 +349,71 @@
       }
     },
 
+    "sisirve": {
+      "id": "sisirve",
+      "nombre": "Efectividad del Producto",
+      "descripcion": "Cliente pregunta si el producto sirve o es efectivo",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(si sirve|sirve|es efectivo|funciona|ser[aá] que (si )?me sirve|ser[aá] que funciona|realmente funciona|de verdad funciona|hace efecto)",
+        "palabras_clave": ["sirve", "efectivo", "funciona", "hace efecto"],
+        "excluir_si_contiene": []
+      },
+      "respuesta": {
+        "primera_vez": ["/sisirve", "/tiempoefecto1", "/tiempoefecto2"],
+        "siguientes": ["/sisirve", "/tiempoefecto2"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "metodos_de_pago": {
+      "id": "metodos_de_pago",
+      "nombre": "Lista Completa de Métodos de Pago",
+      "descripcion": "Cliente pregunta por otros métodos de pago después de ver contraentrega",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(qu[eé] otros m[eé]todos|otros m[eé]todos de pago|qu[eé] m[aá]s opciones|otras formas de pago|puedo pagar con|aceptan)",
+        "palabras_clave": ["otros metodos", "que mas", "puedo pagar"],
+        "excluir_si_contiene": [],
+        "contexto": "Usar cuando el cliente ya vio /modopago y pregunta por otras opciones"
+      },
+      "respuesta": {
+        "primera_vez": ["/metodos_de_pago"],
+        "siguientes": ["/metodos_de_pago"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
+    "modopago2": {
+      "id": "modopago2",
+      "nombre": "Confirmación Contraentrega",
+      "descripcion": "Cliente pregunta específicamente si es contraentrega después de ver /modopago",
+      "prioridad": 2,
+      "deteccion": {
+        "regex": "(?i)(es contraentrega|solo contraentrega|pago al recibir|pagar al llegar|pagar cuando llegue|contraentrega si|tengo que pagar)",
+        "palabras_clave": ["contraentrega", "pago al recibir", "pagar al llegar"],
+        "excluir_si_contiene": [],
+        "contexto": "Usar cuando el cliente ya vio /modopago y pregunta específicamente por contraentrega"
+      },
+      "respuesta": {
+        "primera_vez": ["/modopago2"],
+        "siguientes": ["/modopago2"]
+      },
+      "flags": {
+        "needs_payment_link": false,
+        "needs_agent_handoff": false,
+        "captura_datos": false
+      }
+    },
+
     "fallback": {
       "id": "fallback",
       "nombre": "Fallback a Humano",
@@ -427,6 +492,56 @@
       "respuesta": {
         "primera_vez": ["/hola", "/captura_datos_intro", "/captura_datos_lista"],
         "siguientes": ["/hola", "/captura_datos_intro", "/captura_datos_lista"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+info_promociones": {
+      "descripcion": "Saludo + pregunta info promociones",
+      "deteccion": "Match 'hola' AND 'info_promociones' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/info_promo_intro", "/plantilla_info_promociones", "/info_promo_pregunta"],
+        "siguientes": ["/hola", "/info_promo_intro", "/plantilla_info_promociones", "/info_promo_pregunta"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+contenido_envase": {
+      "descripcion": "Saludo + pregunta contenido envase",
+      "deteccion": "Match 'hola' AND 'contenido_envase' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/contenidoenvase", "/tiempoefecto1"],
+        "siguientes": ["/hola", "/contenidoenvase"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+invima": {
+      "descripcion": "Saludo + pregunta invima",
+      "deteccion": "Match 'hola' AND 'invima' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/invima"],
+        "siguientes": ["/hola", "/invima"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+contraindicaciones": {
+      "descripcion": "Saludo + pregunta contraindicaciones",
+      "deteccion": "Match 'hola' AND 'contraindicaciones' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/contraindicaciones", "/contraindicaciones_anticoagulantes"],
+        "siguientes": ["/hola", "/contraindicaciones"]
+      },
+      "prioridad": 1
+    },
+
+    "hola+sisirve": {
+      "descripcion": "Saludo + pregunta si sirve",
+      "deteccion": "Match 'hola' AND 'sisirve' en mismo mensaje",
+      "respuesta": {
+        "primera_vez": ["/hola", "/sisirve", "/tiempoefecto1", "/tiempoefecto2"],
+        "siguientes": ["/hola", "/sisirve", "/tiempoefecto2"]
       },
       "prioridad": 1
     }

@@ -1,0 +1,512 @@
+[
+  {
+    "name": "_zxor",
+    "value": "\"https://accounts.zoho.com\"",
+    "domain": "accounts.zoho.com",
+    "path": "/wms",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zmuac",
+    "value": "ODU3OTQyMjc5XzI0NjEwNDE=",
+    "domain": "mail.zoho.com",
+    "path": "/biz",
+    "expires": 1769812911.239858,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zmcdn",
+    "value": "NDYuMjAyLjE3Ny4xODE6OlVT",
+    "domain": "mail.zoho.com",
+    "path": "/biz",
+    "expires": 1767307311.239885,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "_zxor",
+    "value": "\"https://bigin.zoho.com\"",
+    "domain": "tipengine.zoho.com",
+    "path": "/jsp",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zalb_e188bc05fe",
+    "value": "8db261d30d9c85a68e92e4f91ec8079a",
+    "domain": "accounts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "stk",
+    "value": "2bc0986029252120aba4ac647fcce796",
+    "domain": "accounts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "__Secure-iamsdt",
+    "value": "0.EnQSMEV5iI-O8A46mnWFhG1xY9R--eDuS-ZhaKdr_xd_Y71BjTza4ym2FBCYtMyqaJvLfBpAyiSHTgaEk5FGHg5alb3usCUnAq-0LhgWjHBFobHnBURrLYwLWFJw0d4IWEkRwEbXo7IQ70EZ30p7xSgJQHWPwg",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": 1770244910.442683,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_iamadt",
+    "value": "4579888f8ef00e3a9a7585846d7163d47ef9e0ee4be66168a76bff177f63bd418d3cdae329b6141098b4ccaa689bcb7c",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": 1770244910.442957,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_iambdt",
+    "value": "ca24874e06849391461e0e5a95bdeeb0252702afb42e18168c7045a1b1e705446b2d8c0b585270d1de08584911c046d7a3b210ef4119df4a7bc5280940758fc2",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": 1770244910.443098,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "IAMSATCK_857942279",
+    "value": "eyJraWQiOiJhY2NvdW50cy5lYXIuc2VjcmV0LmxhYmVsIiwiZW5jIjoiQTI1NkNCQyIsImFsZyI6ImRpciJ9...OGNjYTlkYWQ2ZTcyZWEzNjhjNmI0YzRjMDYyOWJmNDY2NWMwZTExNGRhMGMzZDNiMzBiNTY3OTc4NDNkMDI3ZjU3NTkwYTVhMGIyOTdiNjRiNGMzMmZiMDY2NDNlNTg1ZTlmMDA5MDlhZTUwOThmOGEzODQ5NmQxY2EzNGRlZmYyNjI4YzdiOTczYzEyZmU5NGY2ZTJmNDM3MTljZTgyZQ.",
+    "domain": "accounts.zoho.com",
+    "path": "/",
+    "expires": 1774996910.443273,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "iamcsr",
+    "value": "2d709b595a36ad71d04107854c0b6fdc82c8f16b121f8938cb8dd3d83239b2db49caacc93a42f3bb1eab3d83546cbe2005e608f2d6cae4c0d9d576460ab42aa7",
+    "domain": "accounts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zalb_c57526c03c",
+    "value": "12b554105fa89b70002b25b1e9cb67fe",
+    "domain": "contacts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "concsr",
+    "value": "e90c0253fa04b5854b6724122a5ddba473aa921d6163bdb0e73690bc24b7a2832df7e38d37216cfcad5141ca20b755a647fede1ec842c395f8f2731cc4c34d16",
+    "domain": "contacts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "wms-tkp-token",
+    "value": "857942279-ea280555-22a8bc0eee1e84d4460665e5c4b1cb3e",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zalb_ad62b78f7f",
+    "value": "04c51a48e37ba9e69766ad41cd251ae9",
+    "domain": "mail.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "zmcsr",
+    "value": "e0e7b46d5f0c99bc4283d58cdee21b2028caf72dcffdf27ce822c9ce80477151efa652368174244dbad7e7c991692f10c369b5e278e21b62c4da82bf738936e8",
+    "domain": "mail.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_zcsr_tmp",
+    "value": "e0e7b46d5f0c99bc4283d58cdee21b2028caf72dcffdf27ce822c9ce80477151efa652368174244dbad7e7c991692f10c369b5e278e21b62c4da82bf738936e8",
+    "domain": "mail.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zmirc",
+    "value": "-1",
+    "domain": "mail.zoho.com",
+    "path": "/",
+    "expires": 1767307311.239869,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zalb_3d223cf300",
+    "value": "e7daf194bba5b5684705c7476baa48dd",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "crmcsr",
+    "value": "1afa12301bc147d192c02b2994de1a928be0f56d561d1badf169350bec913309d4b3b35ee608311fb92e13d15bd8b0eecf7e327ee7ddae9818862473fdaa3bfb",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "_zcsr_tmp",
+    "value": "1afa12301bc147d192c02b2994de1a928be0f56d561d1badf169350bec913309d4b3b35ee608311fb92e13d15bd8b0eecf7e327ee7ddae9818862473fdaa3bfb",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zalb_zid",
+    "value": "857936781",
+    "domain": ".bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "BIGINCROSSCDNID",
+    "value": "5d6c90f3677418778b84c1c2ca1513dc44c83dd27f57f732beba1e5f027edd8d8c91e35c28a55923c421020051dce262",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": 1767278516.378732,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "BIGINCROSSCDNCOUNTRY",
+    "value": "US",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": 1767278516.378758,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "zalb_411d3a3a16",
+    "value": "d74e5525dacbc51be494ecf118819cd7",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "zalb_3309580ed5",
+    "value": "4ef15ebc8cedc3213c24d851c893650d",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "CT_CSRF_TOKEN",
+    "value": "1afa12301bc147d192c02b2994de1a928be0f56d561d1badf169350bec913309d4b3b35ee608311fb92e13d15bd8b0eecf7e327ee7ddae9818862473fdaa3bfb",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zalb_857c6a127a",
+    "value": "a8d0b9f0fde0e9e0bdf400c05992f7a1",
+    "domain": "phonebridge.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "phonebridgecsr",
+    "value": "dd61ca866da3e05d266e25ad2ee90e5106d3969d1c5713d97493cda6605ab39c7e026c11496f4b641ac64a7ff5222954ec74cc37f20dd9fbd5c079c1b5c4afd0",
+    "domain": "phonebridge.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zalb_8b7213828d",
+    "value": "6697e980e49f33384806f1dc3eb5520c",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "CSRF_TOKEN",
+    "value": "1afa12301bc147d192c02b2994de1a928be0f56d561d1badf169350bec913309d4b3b35ee608311fb92e13d15bd8b0eecf7e327ee7ddae9818862473fdaa3bfb",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "zalb_c57526c03c",
+    "value": "d0772e477c259cb3b6dd8338e0b29e18",
+    "domain": "profile.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "concsr",
+    "value": "31a2a304e7e8f54b605185cdf7d8a1a8e59e4efa6c792dd45e2a859b1a8d9ab11260417155cc094dd844d3e454bb645b9d83eee88ee051a1e38329eb8ab4ff19",
+    "domain": "profile.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "crmcsr",
+    "value": "90ca3193-6749-4a4c-a001-70fbc040579d",
+    "domain": "desk.zoho.in",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zalb_b5de8fa5c7",
+    "value": "1a7ae3fcdc39e4d0a9188e903d2363ce",
+    "domain": "tipengine.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "iamcsr",
+    "value": "f337092ce013d5b5f16d75ecddf70c347d5e7bb498c12cab478edc440fe5876c7a6cbf7b07af5bebe91fa728e73d6e5b8198627c2f6e6fec158ae150398d1e52",
+    "domain": "tipengine.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "_zxor",
+    "value": "\"https://bigin.zoho.com\"",
+    "domain": "tipengine.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "8998C95CC3CDCA04B45EE8B116D85773",
+    "domain": "tipengine.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "LS_CSRF_TOKEN",
+    "value": "25c2a712-ed43-456f-a4ce-573f8f5b501e",
+    "domain": "salesiq.zohopublic.in",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "zalb_a2a49d94a2",
+    "value": "22e12d601c1594da5bd0b0ad90d75f1d",
+    "domain": "avcliq.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "CT_CSRF_TOKEN",
+    "value": "aba8784e4633e0d901239362dd21c44b8f3858f73bcd43c8723976c5c76802919fbd66495d752b10fe8d62918c31a59269d54eabf36bb5a1dacaba04c46f1f7b",
+    "domain": "avcliq.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "_zxor",
+    "value": "\"https://bigin.zoho.com\"",
+    "domain": "avcliq.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "89AB8533670E1CABD7780C993734078E",
+    "domain": "mail.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "CFFBFAF2A69A4FC1AA7F1F6FA92AD659",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "0D317B5B30A7A0A602CDA24C4C08AD6A",
+    "domain": "profile.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "F95B5C0D1E93503DAC54718E058E602D",
+    "domain": "avcliq.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "JSESSIONID",
+    "value": "F8CA652EE20AC033192CD27B40D59D5B",
+    "domain": "accounts.zoho.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "com_chat_owner",
+    "value": "1767229927793",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": 1767229988,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "com_avcliq_owner",
+    "value": "1767229927793",
+    "domain": ".zoho.com",
+    "path": "/",
+    "expires": 1767229988,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Strict"
+  },
+  {
+    "name": "ZGZG_DNFY",
+    "value": "4544116448821780991",
+    "domain": "bigin.zoho.com",
+    "path": "/",
+    "expires": 1767229938,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "uesign",
+    "value": "6201d78988a6bd14c6cbda9ba887e178a64f1f66f18694c2a0675975ed833bc81af8d55748997559fb35ff6beccb1724",
+    "domain": "salesiq.zohopublic.in",
+    "path": "/",
+    "expires": 1769821930.018245,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "None"
+  }
+]

@@ -137,6 +137,21 @@
       "texto": "¿Te gustaría adquirir alguno de estos paquetes?",
       "delay_s": 4,
       "notas": "Pregunta final de info_promociones - Si responde sí, activar captura_datos_si_compra"
+    },
+    "/metodos_de_pago": {
+      "texto": "Como metodos de pago manejamos:\n\n- Pago contra-entrega (Pagas al recibir en efectivo).\n- Transferencias (Bancolombia, Nequi y Daviplata).\n- Tarjeta debito/credito (link de pago).",
+      "delay_s": 0,
+      "notas": "Lista completa de todos los métodos de pago - Usar después de /modopago cuando preguntan por otros métodos"
+    },
+    "/modopago2": {
+      "texto": "Claro que sí! El producto lo pagas al recibirlo cuando te llegue💴",
+      "delay_s": 0,
+      "notas": "Confirmación simple de contraentrega - Usar cuando ya se envió /modopago y pregunta específicamente si es contraentrega"
+    },
+    "/sisirve": {
+      "texto": "Claro que sí! El tiempo en el que el suplemento empezará a hacer efecto depende de la severidad de tu insomnio",
+      "delay_s": 0,
+      "notas": "Respuesta a preguntas de efectividad - Usar con /tiempoefecto1 y /tiempoefecto2"
     }
   },
   "plantillas_callbell": {
@@ -414,6 +429,123 @@
         "/info_promo_pregunta"
       ],
       "notas": "Información de promociones - Tono informativo, sin presión de venta"
+    },
+    "hola+info_promociones": {
+      "primera_vez": [
+        "/hola",
+        "/info_promo_intro",
+        "/plantilla_info_promociones",
+        "/info_promo_pregunta"
+      ],
+      "siguientes": [
+        "/hola",
+        "/info_promo_intro",
+        "/plantilla_info_promociones",
+        "/info_promo_pregunta"
+      ],
+      "notas": "Saludo + info promociones"
+    },
+    "hola+contenido_envase": {
+      "primera_vez": [
+        "/hola",
+        "/contenidoenvase",
+        "/tiempoefecto1"
+      ],
+      "siguientes": [
+        "/hola",
+        "/contenidoenvase"
+      ],
+      "notas": "Saludo + pregunta contenido envase"
+    },
+    "hola+modopago": {
+      "primera_vez": [
+        "/hola",
+        "/modopago"
+      ],
+      "siguientes": [
+        "/hola",
+        "/modopago"
+      ],
+      "notas": "Saludo + pregunta modo de pago"
+    },
+    "hola+envio": {
+      "primera_vez": [
+        "/hola",
+        "/envio",
+        "/envio_empresas"
+      ],
+      "siguientes": [
+        "/hola",
+        "/envio"
+      ],
+      "notas": "Saludo + pregunta envío"
+    },
+    "hola+invima": {
+      "primera_vez": [
+        "/hola",
+        "/invima"
+      ],
+      "siguientes": [
+        "/hola",
+        "/invima"
+      ],
+      "notas": "Saludo + pregunta invima"
+    },
+    "hola+contraindicaciones": {
+      "primera_vez": [
+        "/hola",
+        "/contraindicaciones",
+        "/contraindicaciones_anticoagulantes"
+      ],
+      "siguientes": [
+        "/hola",
+        "/contraindicaciones"
+      ],
+      "notas": "Saludo + pregunta contraindicaciones"
+    },
+    "metodos_de_pago": {
+      "primera_vez": [
+        "/metodos_de_pago"
+      ],
+      "siguientes": [
+        "/metodos_de_pago"
+      ],
+      "notas": "Lista completa de métodos de pago - Usar después de /modopago"
+    },
+    "modopago2": {
+      "primera_vez": [
+        "/modopago2"
+      ],
+      "siguientes": [
+        "/modopago2"
+      ],
+      "notas": "Confirmación simple contraentrega"
+    },
+    "sisirve": {
+      "primera_vez": [
+        "/sisirve",
+        "/tiempoefecto1",
+        "/tiempoefecto2"
+      ],
+      "siguientes": [
+        "/sisirve",
+        "/tiempoefecto2"
+      ],
+      "notas": "Respuesta efectividad + tiempo de efecto"
+    },
+    "hola+sisirve": {
+      "primera_vez": [
+        "/hola",
+        "/sisirve",
+        "/tiempoefecto1",
+        "/tiempoefecto2"
+      ],
+      "siguientes": [
+        "/hola",
+        "/sisirve",
+        "/tiempoefecto2"
+      ],
+      "notas": "Saludo + pregunta si sirve"
     }
   },
   "reglas_primera_pregunta": {
