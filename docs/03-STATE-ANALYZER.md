@@ -1,522 +1,650 @@
-# State Analyzer - Documentación Técnica
+# 03 - STATE ANALYZER
 
-## 📋 Resumen
-**Workflow:** State Analyzer
-**Función Principal:** Detector de intenciones del usuario usando Claude API
-**Tipo:** Analizador LLM + Validador de flujo
-**Endpoints:** `/webhook/state-analyzer`
+> **Rol:** Cerebro Analítico - Detector de Intenciones
+> **Endpoint:** `POST /webhook/state-analyzer`
+> **Archivo:** `workflows/03-state-analyzer.json`
+> **Modelo IA:** Claude Sonnet 4 (`claude-sonnet-4-20250514`)
 
-## 🎯 Propósito
+---
 
-El State Analyzer es el **cerebro analítico** del sistema. Usa Claude Sonnet 4.5 para analizar el historial completo de la conversación y detectar qué quiere el cliente (intent), aplicando validaciones de flujo para asegurar que los intents transaccionales solo se activen en el momento correcto.
+## 1. DESCRIPCIÓN GENERAL
 
-## 🔄 Flujo de Procesamiento
+State Analyzer es el **cerebro analítico** del sistema v3DSL. Utiliza Claude AI para analizar el historial de conversación y detectar la intención del usuario, validando transiciones de estado y manteniendo coherencia en el flujo conversacional.
 
-### 1. Recepción de Request
+### Responsabilidades Principales
+- Recibir historial de conversación y mensajes pendientes
+- Normalizar mensajes de landing pages
+- Construir contexto para Claude AI
+- Detectar intención del usuario
+- Validar transiciones de intent según reglas de negocio
+- Detectar automáticamente oportunidades de venta
+- Sincronizar historial de intents vistos
+
+---
+
+## 2. ARQUITECTURA DE NODOS
+
+### 2.1 Diagrama de Flujo
+
 ```
-Webhook → Parse Input
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            STATE ANALYZER                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌──────────┐    ┌─────────────┐    ┌──────────────────┐    ┌────────────────┐  │
+│  │ Webhook  │───▶│ Parse       │───▶│ Prepare Claude   │───▶│ Call Claude    │  │
+│  │ POST     │    │ Input       │    │ Messages         │    │ API            │  │
+│  └──────────┘    └─────────────┘    └──────────────────┘    └───────┬────────┘  │
+│                                                                      │           │
+│                                                                      ▼           │
+│                                                              ┌─────────────┐     │
+│                                                              │ Extract     │     │
+│                                                              │ Response    │     │
+│                                                              └──────┬──────┘     │
+│                                                                     │            │
+│                                                                     ▼            │
+│                                                              ┌─────────────┐     │
+│                                                              │ Respond     │     │
+│                                                              │ JSON        │     │
+│                                                              └─────────────┘     │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Input esperado:**
+### 2.2 Inventario Completo de Nodos
+
+| # | Nodo | Tipo | Función |
+|---|------|------|---------|
+| 1 | **Webhook** | `webhook` | Recibe POST en `/state-analyzer` con responseNode |
+| 2 | **Parse Input** | `code` | Extrae phone, historial, pending_messages, captured_data, intents_vistos |
+| 3 | **Prepare Claude Messages** | `code` | Construye system prompt y mensajes para Claude |
+| 4 | **Call Claude API** | `httpRequest` | POST a `api.anthropic.com/v1/messages` |
+| 5 | **Extract Response** | `code` | Parsea JSON de Claude, aplica validaciones de negocio |
+| 6 | **Respond** | `respondToWebhook` | Retorna resultado JSON |
+
+---
+
+## 3. ENDPOINTS
+
+### 3.1 Endpoint Principal
+
+```
+POST https://n8n.automatizacionesmorf.com/webhook/state-analyzer
+```
+
+**Headers:**
+```
+Content-Type: application/json
+```
+
+**Payload de Entrada:**
 ```json
 {
-  "phone": "57...",
+  "phone": "573001234567",
   "historial": [
-    {"id": 1, "role": "user", "content": "hola", "direction": "inbound"},
-    {"id": 2, "role": "assistant", "content": "¡Hola!...", "direction": "outbound"}
+    {
+      "role": "user",
+      "content": "Hola"
+    },
+    {
+      "role": "assistant",
+      "content": "¡Hola! Soy Carolina, tu asesora de Somnio..."
+    },
+    {
+      "role": "user",
+      "content": "Cuánto cuesta el producto?"
+    }
   ],
   "pending_messages": [
-    {"id": 3, "role": "user", "content": "cuánto cuesta?", "direction": "inbound"}
+    {
+      "role": "user",
+      "content": "Cuánto cuesta el producto?"
+    }
   ],
   "captured_data": {
     "nombre": "Juan",
-    "_last_intent": "hola",
-    "_intents_vistos": ["hola"]
-  },
-  "intents_vistos": ["hola"]
+    "apellido": null,
+    "telefono": "573001234567",
+    "direccion": null,
+    "barrio": null,
+    "ciudad": null,
+    "departamento": null,
+    "correo": null,
+    "_intents_vistos": [
+      {"intent": "hola", "orden": 1}
+    ],
+    "_last_intent": "hola"
+  }
 }
 ```
 
-### 2. Preparación de Mensajes para Claude
-```
-Parse Input → Prepare Claude Messages
-```
-
-**System Prompt (Simplificado):**
-```
-Eres un analizador de intents para Somnio (producto: Elixir del Sueño).
-Tu tarea es SOLO detectar el intent y extraer datos del mensaje. NO generes respuestas.
-
-Analiza el historial completo, prestando especial atención a los mensajes pendientes.
-
-Retorna JSON:
+**Payload de Respuesta:**
+```json
 {
-  "intent": "string",
-  "extracted_data": {},
+  "success": true,
+  "intent": "precio",
   "campos_completos": false,
-  "pack_detectado": null
+  "campos_faltantes": ["apellido", "direccion", "barrio", "ciudad", "departamento", "correo"],
+  "pack_detectado": null,
+  "mode": "conversacion",
+  "intents_vistos": [
+    {"intent": "hola", "orden": 1},
+    {"intent": "precio", "orden": 2}
+  ]
+}
+```
+
+---
+
+## 4. LÓGICA DE NEGOCIO
+
+### 4.1 Catálogo de Intents
+
+#### Intents Informativos (Sin restricciones)
+
+| Intent | Trigger | Descripción |
+|--------|---------|-------------|
+| `hola` | Saludo inicial | Bienvenida y presentación |
+| `precio` | Pregunta de precio | Información de costos |
+| `envio` | Pregunta de envío | Tiempos y costos de delivery |
+| `modopago` | Pregunta de pago | Métodos aceptados |
+| `ingredientes` | Pregunta de composición | Información del producto |
+| `funcionamiento` | Cómo funciona | Explicación de uso |
+| `testimonios` | Casos de éxito | Evidencia social |
+| `garantia` | Política de garantía | Devoluciones |
+| `otro` | No clasificable | Fallback informativo |
+
+#### Intents Transaccionales (Con validaciones)
+
+| Intent | Prerequisitos | Descripción |
+|--------|---------------|-------------|
+| `captura_datos_si_compra` | Ninguno | Usuario indica interés en comprar |
+| `ofrecer_promos` | 8 campos completos | Mostrar opciones de pack |
+| `resumen_1x` | `ofrecer_promos` visto | Resumen pack 1 unidad |
+| `resumen_2x` | `ofrecer_promos` visto | Resumen pack 2 unidades |
+| `resumen_3x` | `ofrecer_promos` visto | Resumen pack 3 unidades |
+| `compra_confirmada` | `resumen_Xx` visto | Confirmación final |
+
+#### Intents Combinados
+
+| Intent | Componentes |
+|--------|-------------|
+| `hola+precio` | Saludo + pregunta de precio |
+| `hola+captura` | Saludo + interés de compra |
+| `precio+captura` | Precio + interés de compra |
+
+### 4.2 Sistema de Validación de Transiciones
+
+```javascript
+const TRANSITION_RULES = {
+  // Intents que requieren prerequisitos
+  'ofrecer_promos': {
+    requires: ['campos_completos'],
+    validate: (state) => hasAllFields(state)
+  },
+  'resumen_1x': {
+    requires: ['ofrecer_promos'],
+    validate: (state) => hasSeenIntent(state, 'ofrecer_promos')
+  },
+  'resumen_2x': {
+    requires: ['ofrecer_promos'],
+    validate: (state) => hasSeenIntent(state, 'ofrecer_promos')
+  },
+  'resumen_3x': {
+    requires: ['ofrecer_promos'],
+    validate: (state) => hasSeenIntent(state, 'ofrecer_promos')
+  },
+  'compra_confirmada': {
+    requires: ['resumen_1x', 'resumen_2x', 'resumen_3x'],
+    validate: (state) => hasSeenAnyIntent(state, ['resumen_1x', 'resumen_2x', 'resumen_3x'])
+  }
+};
+
+function validateTransition(intent, state) {
+  const rule = TRANSITION_RULES[intent];
+  if (!rule) return true; // Sin regla = permitido
+
+  if (!rule.validate(state)) {
+    return false; // Transición bloqueada
+  }
+  return true;
+}
+```
+
+### 4.3 Auto-Detección de Intents
+
+```javascript
+// Auto-detectar ofrecer_promos cuando datos completos
+function autoDetectIntent(state, detectedIntent) {
+  const REQUIRED_FIELDS = [
+    'nombre', 'apellido', 'telefono', 'direccion',
+    'barrio', 'ciudad', 'departamento', 'correo'
+  ];
+
+  const camposCompletos = REQUIRED_FIELDS.every(f =>
+    state[f] && state[f].trim() !== ''
+  );
+
+  // Si datos completos Y no hemos ofrecido promos
+  if (camposCompletos && !hasSeenIntent(state, 'ofrecer_promos')) {
+    return 'ofrecer_promos';
+  }
+
+  return detectedIntent;
 }
 
-**Intents permitidos:**
-- hola, precio, info_promociones, contenido_envase, como_se_toma
-- modopago, envio, invima, ubicacion, contraindicaciones
-- captura_datos_si_compra, ofrecer_promos
-- resumen_1x/2x/3x, compra_confirmada, no_confirmado
-- no_interesa, fallback
+// Auto-detectar pack cuando usuario menciona cantidad
+function autoDetectPack(message) {
+  const packPatterns = {
+    '1x': /\b(uno|1|una unidad|el primero)\b/i,
+    '2x': /\b(dos|2|el segundo|pack.*2)\b/i,
+    '3x': /\b(tres|3|el tercero|pack.*3)\b/i
+  };
 
-**Intents combinados:**
-- hola+precio, hola+como_se_toma, hola+envio, hola+modopago
-- hola+captura_datos_si_compra
+  for (const [pack, pattern] of Object.entries(packPatterns)) {
+    if (pattern.test(message)) {
+      return pack;
+    }
+  }
+  return null;
+}
 ```
 
-**Normalización de mensajes de landing page:**
+### 4.4 Normalización de Mensajes de Landing
+
 ```javascript
-const landingPagePattern = /ho?la!?\\s*me\\s*inte?re?sa\\s*comprar\\s*u?n?\\s*(elixir|elxir)?/gi;
-msg.content.replace(landingPagePattern, 'hola ');
+// Mensajes de landing pages llegan con formato específico
+const LANDING_PATTERN = /^Hola[,.]?\s*(me\s+interesa|quiero)\s+(comprar|saber|información)/i;
+
+function normalizeLandingMessage(message) {
+  if (LANDING_PATTERN.test(message)) {
+    return 'hola'; // Normalizar a saludo simple
+  }
+  return message;
+}
 ```
-**Razón:** Landing page envía "Hola me interesa comprar un elixir del sueño" que debe tratarse como simple "hola".
 
-**Focus en mensajes pendientes:**
+### 4.5 Desambiguación Contextual
+
 ```javascript
-if (pendingMessages.length > 0) {
-  const pendingList = pendingMessages.map((m, i) =>
-    (i+1) + '. "' + m.content + '"'
-  ).join('\\n');
+// "Sí" puede significar muchas cosas según contexto
+function disambiguateResponse(message, lastAssistantMessage) {
+  const affirmatives = ['sí', 'si', 'ok', 'dale', 'bueno', 'claro'];
 
-  focusMessage = `
-MENSAJES PENDIENTES (los mas recientes que necesitas analizar):
-${pendingList}
+  if (!affirmatives.some(a => message.toLowerCase().includes(a))) {
+    return null; // No es afirmación
+  }
 
-IMPORTANTE: Analiza PRINCIPALMENTE los mensajes pendientes para detectar el intent actual.
+  // Analizar último mensaje del asistente
+  if (lastAssistantMessage.includes('¿Deseas comprar?')) {
+    return 'captura_datos_si_compra';
+  }
+  if (lastAssistantMessage.includes('¿Cuál pack te interesa?')) {
+    return 'seleccion_pack'; // Necesita más contexto
+  }
+  if (lastAssistantMessage.includes('¿Confirmas tu pedido?')) {
+    return 'compra_confirmada';
+  }
+
+  return null;
+}
+```
+
+---
+
+## 5. INTEGRACIÓN CON CLAUDE API
+
+### 5.1 Configuración de la Llamada
+
+```javascript
+const CLAUDE_CONFIG = {
+  url: 'https://api.anthropic.com/v1/messages',
+  model: 'claude-sonnet-4-20250514',
+  max_tokens: 1024,
+  timeout: 30000,
+  headers: {
+    'anthropic-version': '2023-06-01',
+    'content-type': 'application/json'
+  }
+};
+```
+
+### 5.2 System Prompt
+
+```javascript
+const SYSTEM_PROMPT = `
+Eres un analizador de intenciones para un chatbot de ventas de "Elixir del Sueño" (Somnio).
+
+Tu ÚNICA tarea es analizar el último mensaje del usuario y determinar su intención.
+
+## INTENTS PERMITIDOS
+
+### Informativos (sin restricciones):
+- hola: Saludo o inicio de conversación
+- precio: Pregunta sobre costos
+- envio: Pregunta sobre entrega/shipping
+- modopago: Pregunta sobre métodos de pago
+- ingredientes: Pregunta sobre composición
+- funcionamiento: Pregunta sobre cómo usar/funciona
+- testimonios: Pregunta sobre experiencias de otros
+- garantia: Pregunta sobre devoluciones/garantía
+- otro: Cualquier otra consulta informativa
+
+### Transaccionales (requieren validación):
+- captura_datos_si_compra: Usuario expresa interés en comprar
+- ofrecer_promos: Usuario tiene datos completos, mostrar packs
+- resumen_1x: Usuario elige pack de 1 unidad ($77,900)
+- resumen_2x: Usuario elige pack de 2 unidades ($109,900)
+- resumen_3x: Usuario elige pack de 3 unidades ($139,900)
+- compra_confirmada: Usuario confirma su pedido
+
+### Combinados:
+- hola+precio: Saludo con pregunta de precio
+- hola+captura: Saludo con interés de compra
+
+## DATOS DEL CLIENTE ACTUAL
+{{captured_data}}
+
+## CAMPOS REQUERIDOS (8 total):
+nombre, apellido, telefono, direccion, barrio, ciudad, departamento, correo
+
+## INTENTS YA VISTOS EN ESTA CONVERSACIÓN:
+{{intents_vistos}}
+
+## REGLAS DE VALIDACIÓN
+
+1. "ofrecer_promos" SOLO si los 8 campos están completos
+2. "resumen_Xx" SOLO si "ofrecer_promos" ya fue visto
+3. "compra_confirmada" SOLO si algún "resumen_Xx" ya fue visto
+
+Si el intent detectado no cumple las reglas, usa "fallback" con una explicación.
+
+## RESPUESTA
+
+Responde ÚNICAMENTE con JSON válido:
+{
+  "intent": "nombre_del_intent",
+  "confidence": 0.95,
+  "pack_detectado": null | "1x" | "2x" | "3x",
+  "reasoning": "Explicación breve"
+}
+`;
+```
+
+### 5.3 Construcción de Mensajes
+
+```javascript
+function buildClaudeMessages(historial, pendingMessages, lastAssistantMessage) {
+  const messages = [];
+
+  // Agregar contexto del último mensaje del asistente
+  if (lastAssistantMessage) {
+    messages.push({
+      role: 'user',
+      content: `CONTEXTO: El último mensaje del asistente fue: "${lastAssistantMessage}"`
+    });
+  }
+
+  // Agregar historial resumido
+  const historicoResumido = historial.slice(-10).map(m =>
+    `${m.role}: ${m.content}`
+  ).join('\n');
+
+  messages.push({
+    role: 'user',
+    content: `HISTORIAL RECIENTE:\n${historicoResumido}`
+  });
+
+  // Agregar mensajes pendientes (los que hay que analizar)
+  const pendingText = pendingMessages.map(m => m.content).join('\n');
+  messages.push({
+    role: 'user',
+    content: `MENSAJES A ANALIZAR:\n${pendingText}\n\nDetecta la intención principal.`
+  });
+
+  return messages;
+}
+```
+
+---
+
+## 6. PROCESAMIENTO DE RESPUESTA
+
+### 6.1 Extracción y Validación
+
+```javascript
+function extractAndValidate(claudeResponse, state) {
+  // 1. Parsear JSON de Claude
+  let parsed;
+  try {
+    const text = claudeResponse.content[0].text;
+    // Limpiar markdown si existe
+    const cleaned = text.replace(/```json\n?|\n?```/g, '');
+    parsed = JSON.parse(cleaned);
+  } catch (e) {
+    return { intent: 'otro', error: 'parse_failed' };
+  }
+
+  // 2. Validar transición
+  if (!validateTransition(parsed.intent, state)) {
+    return {
+      intent: 'fallback',
+      original_intent: parsed.intent,
+      reason: 'transition_blocked'
+    };
+  }
+
+  // 3. Auto-detectar ofrecer_promos si aplica
+  const finalIntent = autoDetectIntent(state, parsed.intent);
+
+  // 4. Registrar en intents_vistos
+  const updatedIntents = registerIntent(state._intents_vistos || [], finalIntent);
+
+  // 5. Calcular campos
+  const camposCompletos = checkFieldsComplete(state);
+  const camposFaltantes = getMissingFields(state);
+
+  return {
+    success: true,
+    intent: finalIntent,
+    campos_completos: camposCompletos,
+    campos_faltantes: camposFaltantes,
+    pack_detectado: parsed.pack_detectado,
+    mode: determineMode(finalIntent, camposCompletos),
+    intents_vistos: updatedIntents
+  };
+}
+```
+
+### 6.2 Determinación de Modo
+
+```javascript
+function determineMode(intent, camposCompletos) {
+  const COLLECTING_INTENTS = [
+    'captura_datos_si_compra',
+    'hola+captura'
+  ];
+
+  if (COLLECTING_INTENTS.includes(intent) && !camposCompletos) {
+    return 'collecting_data';
+  }
+
+  return 'conversacion';
+}
+```
+
+### 6.3 Registro de Intents
+
+```javascript
+function registerIntent(intentsVistos, newIntent) {
+  // Evitar duplicados
+  if (intentsVistos.some(i => i.intent === newIntent)) {
+    return intentsVistos;
+  }
+
+  const nextOrden = intentsVistos.length + 1;
+  return [
+    ...intentsVistos,
+    { intent: newIntent, orden: nextOrden }
+  ];
+}
+```
+
+---
+
+## 7. CAMPOS Y VALIDACIONES
+
+### 7.1 Campos Requeridos
+
+| Campo | Tipo | Obligatorio | Ejemplo |
+|-------|------|-------------|---------|
+| `nombre` | string | Sí | "Juan" |
+| `apellido` | string | Sí | "Pérez" |
+| `telefono` | string | Sí | "573001234567" |
+| `direccion` | string | Sí | "Calle 123 #45-67" |
+| `barrio` | string | Tolerado vacío | "Centro" |
+| `ciudad` | string | Sí | "Bogotá" |
+| `departamento` | string | Sí | "Cundinamarca" |
+| `correo` | string | Tolerado vacío | "juan@email.com" |
+
+### 7.2 Precios de Packs
+
+| Pack | Precio COP | Descripción |
+|------|------------|-------------|
+| `1x` | $77,900 | 1 unidad |
+| `2x` | $109,900 | 2 unidades |
+| `3x` | $139,900 | 3 unidades |
+
+---
+
+## 8. MANEJO DE ERRORES
+
+### 8.1 Errores Esperados
+
+| Error | Causa | Manejo |
+|-------|-------|--------|
+| Claude timeout | API lenta >30s | Retornar intent "otro" |
+| Parse failed | Respuesta malformada | Retornar intent "otro" |
+| Transition blocked | Prerequisito no cumplido | Retornar "fallback" |
+
+### 8.2 Fallback Strategy
+
+```javascript
+const FALLBACK_RESPONSE = {
+  success: true,
+  intent: 'otro',
+  campos_completos: false,
+  campos_faltantes: ['desconocido'],
+  pack_detectado: null,
+  mode: 'conversacion',
+  intents_vistos: []
+};
+```
+
+---
+
+## 9. MÉTRICAS Y LOGGING
+
+### 9.1 Eventos Logueados
+
+| Evento | Datos |
+|--------|-------|
+| `analysis_started` | phone, pending_count |
+| `claude_request` | model, tokens_estimated |
+| `claude_response` | latency_ms, tokens_used |
+| `intent_detected` | phone, intent, confidence |
+| `transition_blocked` | phone, intent, reason |
+| `auto_detection` | phone, original, detected |
+
+---
+
+## 10. CONSIDERACIONES PARA MORFX
+
+### 10.1 Abstracción del Modelo
+
+```typescript
+interface IntentAnalyzer {
+  analyze(context: AnalysisContext): Promise<AnalysisResult>;
+}
+
+interface AnalysisContext {
+  history: Message[];
+  pending: Message[];
+  state: ConversationState;
+  tenant: TenantConfig;
+}
+
+interface AnalysisResult {
+  intent: string;
+  confidence: number;
+  metadata: Record<string, any>;
+}
+
+// Implementaciones
+class ClaudeAnalyzer implements IntentAnalyzer { ... }
+class OpenAIAnalyzer implements IntentAnalyzer { ... }
+class RuleBasedAnalyzer implements IntentAnalyzer { ... }
+```
+
+### 10.2 Sistema de Reglas Configurable
+
+```typescript
+interface TransitionRule {
+  intent: string;
+  requires: string[];
+  condition: (state: State) => boolean;
+  fallback: string;
+}
+
+interface TenantIntentConfig {
+  informationalIntents: Intent[];
+  transactionalIntents: Intent[];
+  combinedIntents: Intent[];
+  transitionRules: TransitionRule[];
+  autoDetectionRules: AutoDetectionRule[];
+}
+```
+
+### 10.3 Prompt Templates por Tenant
+
+```typescript
+interface PromptTemplate {
+  tenantId: string;
+  productName: string;
+  productDescription: string;
+  allowedIntents: string[];
+  customRules: string;
+  responseFormat: string;
+}
+
+function buildSystemPrompt(template: PromptTemplate, state: State): string {
+  return `
+    Eres un analizador de intenciones para ${template.productName}.
+    ${template.productDescription}
+
+    Intents permitidos: ${template.allowedIntents.join(', ')}
+
+    ${template.customRules}
+
+    Responde en formato: ${template.responseFormat}
   `;
 }
 ```
 
-**Contexto para "si/ok/dale":**
-```javascript
-// Detectar último mensaje del asistente
-let lastAssistantMessage = '';
-for (let i = historial.length - 1; i >= 0; i--) {
-  if (historial[i].role === 'assistant') {
-    lastAssistantMessage = historial[i].content.toLowerCase();
-    break;
-  }
+### 10.4 Caché de Intents Frecuentes
+
+```typescript
+interface IntentCache {
+  get(messageHash: string): CachedIntent | null;
+  set(messageHash: string, result: AnalysisResult, ttl: number): void;
+  invalidate(pattern: string): void;
 }
 
-// Contexto según pregunta anterior
-if (lastAssistantMessage.includes('confirmar tu compra')) {
-  contextoSi = 'Si el usuario dice "si/ok/dale" → intent: compra_confirmada';
-} else if (lastAssistantMessage.includes('deseas adquirir')) {
-  contextoSi = 'Si el usuario dice "si/ok/dale" → intent: captura_datos_si_compra';
-} else if (lastAssistantMessage.includes('cual eliges')) {
-  contextoSi = 'Si el usuario dice "1x/2x/3x/uno/dos/tres" → detectar pack';
-}
+// Mensajes comunes pueden cachearse
+const CACHEABLE_PATTERNS = [
+  'hola',
+  'precio',
+  'cuanto cuesta',
+  'envio gratis'
+];
 ```
-
-### 3. Llamada a Claude API
-```
-Prepare Messages → Call Claude API
-```
-
-**Configuración:**
-```json
-{
-  "model": "claude-sonnet-4-20250514",
-  "max_tokens": 1024,
-  "system": "...",
-  "messages": [...]
-}
-```
-
-**API:**
-- POST `https://api.anthropic.com/v1/messages`
-- Header: `anthropic-version: 2023-06-01`
-- Auth: `anthropic-api-account` credential
-- Timeout: 30 segundos
-
-### 4. Extracción y Validación de Respuesta
-```
-Call Claude API → Extract Response
-```
-
-**Extract Response realiza:**
-
-1. **Parse JSON de Claude:**
-```javascript
-let cleanText = responseText.trim();
-if (cleanText.startsWith('```json')) {
-  cleanText = cleanText.replace(/^```json\\s*/, '').replace(/\\s*```$/, '');
-}
-
-const parsed = JSON.parse(cleanText);
-let intent = parsed.intent || 'fallback';
-let extractedData = parsed.extracted_data || {};
-let packDetectado = parsed.pack_detectado;
-```
-
-2. **🔥 SINCRONIZAR _last_intent:**
-```javascript
-// Si el último intent ejecutado por Carolina no está en la lista, agregarlo
-if (prevData.captured_data._last_intent &&
-    !intentsVistos.includes(prevData.captured_data._last_intent)) {
-  intentsVistos.push(prevData.captured_data._last_intent);
-  capturedData._intents_vistos = intentsVistos;
-}
-```
-**Razón:** Carolina ejecuta `ofrecer_promos` automáticamente cuando campos completos, pero no siempre se registra en intents_vistos. Esta sync lo corrige.
-
-3. **Merge extracted_data:**
-```javascript
-for (const key in extractedData) {
-  if (extractedData[key] && extractedData[key].toString().trim() !== '') {
-    capturedData[key] = extractedData[key];
-  }
-}
-```
-
-4. **Verificar campos completos:**
-```javascript
-const requiredFields = ['nombre', 'apellido', 'telefono', 'direccion',
-                        'barrio', 'departamento', 'ciudad', 'correo'];
-const allFieldsComplete = requiredFields.every(field =>
-  capturedData[field] && String(capturedData[field]).trim() !== ''
-);
-```
-
-5. **🔒 VALIDACIONES DE INTENTS (Condicionales):**
-
-#### Helper functions:
-```javascript
-const hasSeenIntent = (intentName) =>
-  intentsVistos.includes(intentName) ||
-  prevData.captured_data._last_intent === intentName;
-
-const hasSeenAnyIntent = (intentNames) =>
-  intentNames.some(name => intentsVistos.includes(name) ||
-    prevData.captured_data._last_intent === name);
-```
-
-#### 1️⃣ ofrecer_promos
-```javascript
-if (intent === 'ofrecer_promos') {
-  if (!allFieldsComplete) {
-    console.log('❌ BLOQUEADO: ofrecer_promos requiere todos los campos completos');
-    intent = 'fallback';
-  } else {
-    console.log('✅ PERMITIDO: ofrecer_promos (campos completos)');
-  }
-}
-```
-
-#### 2️⃣ resumen_1x/2x/3x
-```javascript
-if (intent.startsWith('resumen_')) {
-  if (!hasSeenIntent('ofrecer_promos')) {
-    console.log('❌ BLOQUEADO: resumen requiere que se hayan ofrecido promos primero');
-    intent = 'fallback';
-  } else {
-    console.log('✅ PERMITIDO: resumen (ya se ofrecieron promos)');
-  }
-}
-```
-
-#### 3️⃣ compra_confirmada
-```javascript
-if (intent === 'compra_confirmada') {
-  const hasSeenResumen = hasSeenAnyIntent(['resumen_1x', 'resumen_2x', 'resumen_3x']);
-
-  if (!hasSeenResumen) {
-    console.log('❌ BLOQUEADO: compra_confirmada requiere resumen_Xx primero');
-    intent = 'fallback';
-  } else {
-    console.log('✅ PERMITIDO: compra_confirmada (ya se mostró resumen)');
-  }
-}
-```
-
-#### 4️⃣ no_confirmado
-```javascript
-if (intent === 'no_confirmado') {
-  const hasSeenResumen = hasSeenAnyIntent(['resumen_1x', 'resumen_2x', 'resumen_3x']);
-
-  if (!hasSeenResumen) {
-    console.log('❌ BLOQUEADO: no_confirmado requiere resumen_Xx primero');
-    intent = 'fallback';
-  } else {
-    console.log('✅ PERMITIDO: no_confirmado (ya se mostró resumen)');
-  }
-}
-```
-
-6. **🤖 AUTO-DETECCIÓN:**
-
-#### Auto-detect: ofrecer_promos
-```javascript
-if (allFieldsComplete && !packDetectado && !capturedData.pack &&
-    intent !== 'ofrecer_promos') {
-  if (intent === 'fallback' || intent === 'captura_datos_si_compra') {
-    intent = 'ofrecer_promos';
-    console.log('🤖 AUTO-DETECT: Activando ofrecer_promos (datos completos)');
-
-    // 🔥 FIX CRITICO: Agregar inmediatamente a intents_vistos
-    if (!intentsVistos.includes('ofrecer_promos')) {
-      intentsVistos.push('ofrecer_promos');
-      capturedData._intents_vistos = intentsVistos;
-      console.log('✅ AUTO-DETECT: ofrecer_promos agregado a intents_vistos INMEDIATAMENTE');
-    }
-  }
-}
-```
-
-#### Auto-detect: resumen_Xx (pack seleccionado)
-```javascript
-if (packDetectado) {
-  if (hasSeenIntent('ofrecer_promos')) {
-    intent = `resumen_${packDetectado}`;
-    capturedData.pack = packDetectado;
-
-    const precios = { '1x': 77900, '2x': 109900, '3x': 139900 };
-    capturedData.precio = precios[packDetectado];
-
-    console.log('🤖 AUTO-DETECT: Activando resumen_' + packDetectado);
-  } else {
-    console.log('❌ BLOQUEADO: No se puede activar resumen sin ofrecer_promos primero');
-    intent = 'fallback';
-  }
-}
-```
-
-7. **Activar collecting_data mode:**
-```javascript
-let newMode = null;  // null = no cambiar
-
-if (intent === 'captura_datos_si_compra' ||
-    intent === 'hola+captura_datos_si_compra' ||
-    intent.startsWith('resumen_')) {
-  newMode = 'collecting_data';
-}
-```
-
-8. **Registrar intent visto:**
-```javascript
-if (intent && intent !== 'fallback' && !intentsVistos.includes(intent)) {
-  intentsVistos.push(intent);
-  capturedData._intents_vistos = intentsVistos;
-}
-```
-
-### 5. Respuesta
-```
-Extract Response → Respond
-```
-
-**Response:**
-```json
-{
-  "phone": "57...",
-  "intent": "precio",
-  "new_mode": "collecting_data" | null,
-  "extracted_data": {"nombre": "Juan"},
-  "captured_data": {
-    "nombre": "Juan",
-    "_last_intent": "precio",
-    "_intents_vistos": ["hola", "precio"]
-  },
-  "campos_completos": false,
-  "pack_detectado": null,
-  "all_fields_complete": false
-}
-```
-
-## 🎯 Intents y Su Lógica
-
-### Informativos (sin restricciones)
-- `hola` - Saludo
-- `precio` - Precio del producto
-- `info_promociones` - Info de paquetes
-- `contenido_envase` - Cantidad de cápsulas
-- `como_se_toma` - Modo de uso
-- `modopago` - Formas de pago
-- `envio` - Cobertura
-- `invima` - Registro sanitario
-- `ubicacion` - Tienda física
-- `contraindicaciones` - Efectos secundarios
-- `fallback` - No entendido
-
-### Combinados
-- `hola+precio`
-- `hola+como_se_toma`
-- `hola+envio`
-- `hola+modopago`
-- `hola+captura_datos_si_compra`
-
-### Transaccionales (con validaciones)
-
-#### Nivel 1: Captura
-- `captura_datos_si_compra` - Cliente quiere comprar
-  - **Sin restricciones**
-  - Activa `mode: collecting_data`
-
-#### Nivel 2: Ofrecer Promos
-- `ofrecer_promos` - Mostrar paquetes 1x/2x/3x
-  - **Requiere:** 8 campos completos
-  - **Auto-activado** cuando campos completos
-
-#### Nivel 3: Resumen
-- `resumen_1x` / `resumen_2x` / `resumen_3x` - Confirmación de pack
-  - **Requiere:** `ofrecer_promos` visto
-  - **Auto-activado** cuando pack detectado
-
-#### Nivel 4: Confirmación Final
-- `compra_confirmada` - Cliente dice "sí" después de resumen
-  - **Requiere:** Algún `resumen_Xx` visto
-- `no_confirmado` - Cliente dice "no"
-  - **Requiere:** Algún `resumen_Xx` visto
-- `no_interesa` - Cliente rechaza
-  - **Sin restricciones**
-
-## 🔍 Casos de Uso
-
-### Caso 1: Saludo Simple
-```
-Input:
-  historial: [{"role": "user", "content": "hola"}]
-  pending: [{"content": "hola"}]
-
-Claude detecta: "hola"
-Validación: ✅ Sin restricciones
-Output: {intent: "hola"}
-```
-
-### Caso 2: Cliente Completa Datos
-```
-Input:
-  historial: [
-    {"role": "user", "content": "Juan Perez"},
-    {"role": "user", "content": "Calle 123, Bogotá"}
-  ]
-  captured_data: {nombre: "Juan", apellido: "Perez", ...}  // 8 campos completos
-
-Claude detecta: "captura_datos_si_compra" o "fallback"
-AUTO-DETECT: ✅ Campos completos → Cambia a "ofrecer_promos"
-Output: {intent: "ofrecer_promos"}
-```
-
-### Caso 3: Cliente Elige Pack (Prematuro)
-```
-Input:
-  pending: [{"content": "quiero el 2x"}]
-  captured_data: {pack: null}
-  intents_vistos: ["hola", "precio"]  // ⚠️ Sin "ofrecer_promos"
-
-Claude detecta: pack_detectado: "2x"
-AUTO-DETECT: intent = "resumen_2x"
-Validación: ❌ "ofrecer_promos" no visto → Cambia a "fallback"
-Output: {intent: "fallback"}
-```
-
-### Caso 4: Cliente Elige Pack (Correcto)
-```
-Input:
-  pending: [{"content": "el 2x"}]
-  intents_vistos: ["hola", "ofrecer_promos"]
-
-Claude detecta: pack_detectado: "2x"
-AUTO-DETECT: intent = "resumen_2x"
-Validación: ✅ "ofrecer_promos" visto
-Output: {intent: "resumen_2x", pack_detectado: "2x"}
-```
-
-### Caso 5: Confirmación Prematura
-```
-Input:
-  pending: [{"content": "sí, quiero"}]
-  lastAssistantMessage: "¿Deseas adquirir el Elixir?"
-  intents_vistos: ["hola"]  // ⚠️ Sin resumen
-
-Claude detecta: "compra_confirmada" (por contexto "confirmar")
-Validación: ❌ Sin resumen_Xx → Cambia a "fallback"
-Output: {intent: "fallback"}
-```
-
-### Caso 6: Confirmación Correcta
-```
-Input:
-  pending: [{"content": "sí"}]
-  lastAssistantMessage: "¿Confirmas tu compra de 2x?"
-  intents_vistos: ["ofrecer_promos", "resumen_2x"]
-
-Claude detecta: "compra_confirmada"
-Validación: ✅ "resumen_2x" visto
-Output: {intent: "compra_confirmada"}
-```
-
-## 📊 Flujo de Intents Válido
-
-```
-1. hola
-    ↓
-2. captura_datos_si_compra (Cliente: "quiero comprar")
-    ↓ (Usuario proporciona datos)
-3. [AUTO] ofrecer_promos (Cuando 8 campos completos)
-    ↓ (Cliente: "el 2x")
-4. [AUTO] resumen_2x (Pack detectado)
-    ↓ (Cliente: "sí")
-5. compra_confirmada
-    ↓ (Order Manager crea pedido)
-```
-
-## ⚙️ Configuración
-
-### Claude API
-- **Model:** `claude-sonnet-4-20250514`
-- **Max Tokens:** 1024
-- **Temperature:** Default (1.0)
-- **Timeout:** 30 segundos
-
-### Credenciales n8n
-- **Anthropic API:** `anthropic-api-account`
-
-## 📈 Métricas y Logs
-
-### Console Logs Principales
-- `📊 CONDICIONALES - Estado actual` - Estado antes de validar
-- `❌ BLOQUEADO: ...` - Intent bloqueado por validación
-- `✅ PERMITIDO: ...` - Intent permitido
-- `🤖 AUTO-DETECT: ...` - Intent auto-detectado
-- `🔄 SINCRONIZADO: ...` - Intent sincronizado desde _last_intent
-- `📋 Intents vistos actualizados` - Lista actualizada
-
-## 🚨 Errores Comunes
-
-### Error: "Intent bloqueado prematuramente"
-**Causa:** Cliente intenta saltar pasos del flujo
-**Solución:** Validaciones lo evitan, retorna "fallback"
-
-### Error: "ofrecer_promos no se registra"
-**Causa:** Auto-detect no agregaba a intents_vistos
-**Solución:** FIX aplicado, ahora se agrega inmediatamente
-
-### Error: "Claude API timeout"
-**Causa:** API lenta o caída
-**Solución:** Retry automático o manual
-
-## 🔗 Dependencias
-
-**State Analyzer depende de:**
-- Claude API (Anthropic)
-- Historial v3 (llamado por)
-
-**Workflows que dependen de State Analyzer:**
-- Historial v3 (llama para análisis)
-- Data Extractor (trabaja en conjunto)
-
-## 📝 Notas Importantes
-
-1. **No decide qué responder:** Solo detecta intent
-2. **Validaciones estrictas:** Evita saltos de flujo
-3. **Auto-detección inteligente:** ofrecer_promos y resumen_Xx
-4. **Context-aware:** Usa último mensaje del bot para entender "sí/no"
-5. **Sync con Carolina:** Registra intents ejecutados por Carolina
-6. **Mode transitions:** Activa collecting_data cuando necesario
-7. **Pack prices:** Guarda precio según pack detectado

@@ -1,362 +1,582 @@
-# Order Manager - Documentación Técnica
+# 05 - ORDER MANAGER
 
-## 📋 Resumen
-**Workflow:** Order Manager
-**Función Principal:** Creador de pedidos en Bigin CRM
-**Tipo:** Integrador CRM
-**Endpoints:** `/webhook/order-manager`
+> **Rol:** Integrador CRM - Creador de Órdenes en Bigin
+> **Endpoint:** `POST /webhook/order-manager`
+> **Archivo:** `workflows/05-order-manager.json`
 
-## 🎯 Propósito
+---
 
-El Order Manager es el encargado de crear pedidos en Bigin CRM cuando un cliente completa sus datos y elige un pack. Recibe los datos capturados, los valida, prepara el pedido y lo envía al robot API que maneja Bigin.
+## 1. DESCRIPCIÓN GENERAL
 
-## 🔄 Flujo de Procesamiento
+Order Manager es el **agente de integración CRM** del sistema v3DSL. Valida datos del cliente, prepara órdenes con precios según pack seleccionado, crea registros en Zoho Bigin vía Robot API, y actualiza contactos en Callbell con tags de seguimiento.
 
-### 1. Recepción de Request
+### Responsabilidades Principales
+- Validar que la orden no exista previamente
+- Verificar campos obligatorios completos
+- Mapear packs a precios COP
+- Crear orden en Bigin CRM
+- Agregar tags de seguimiento en Callbell
+- Actualizar estado de sesión en PostgreSQL
+
+---
+
+## 2. ARQUITECTURA DE NODOS
+
+### 2.1 Diagrama de Flujo
+
 ```
-Webhook: Order Manager → Parse Request
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                            ORDER MANAGER                                         │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌──────────┐    ┌─────────────┐    ┌──────────────────┐                        │
+│  │ Webhook  │───▶│ Parse       │───▶│ Check Order      │                        │
+│  │ POST     │    │ Request     │    │ Exists (DB)      │                        │
+│  └──────────┘    └─────────────┘    └────────┬─────────┘                        │
+│                                               │                                  │
+│                              ┌────────────────┴────────────────┐                 │
+│                              ▼                                 ▼                 │
+│                       [order_exists]                    [no_order]               │
+│                              │                                 │                 │
+│                              ▼                                 ▼                 │
+│                       ┌─────────────┐                  ┌─────────────┐           │
+│                       │ Return      │                  │ Validate    │           │
+│                       │ Already     │                  │ Data        │           │
+│                       │ Created     │                  └──────┬──────┘           │
+│                       └─────────────┘                         │                  │
+│                                               ┌───────────────┴───────────────┐  │
+│                                               ▼                               ▼  │
+│                                        [data_valid]                   [data_invalid]
+│                                               │                               │  │
+│                                               ▼                               ▼  │
+│                                        ┌─────────────┐                ┌──────────┐
+│                                        │ Prepare     │                │ Return   │
+│                                        │ Bigin Order │                │ Error    │
+│                                        └──────┬──────┘                └──────────┘
+│                                               │                                  │
+│                                               ▼                                  │
+│                                        ┌─────────────┐                           │
+│                                        │ Create in   │                           │
+│                                        │ Bigin (API) │                           │
+│                                        └──────┬──────┘                           │
+│                                               │                                  │
+│                              ┌────────────────┼────────────────┐                 │
+│                              ▼                ▼                ▼                 │
+│                       ┌─────────────┐  ┌─────────────┐  ┌─────────────┐          │
+│                       │ Log Order   │  │ Update      │  │ Add Tags    │          │
+│                       │ Created     │  │ Callbell    │  │ Callbell    │          │
+│                       └──────┬──────┘  └──────┬──────┘  └─────────────┘          │
+│                              │                │                                  │
+│                              └────────┬───────┘                                  │
+│                                       ▼                                          │
+│                                ┌─────────────┐                                   │
+│                                │ Update DB   │                                   │
+│                                │ order_created│                                  │
+│                                └──────┬──────┘                                   │
+│                                       ▼                                          │
+│                                ┌─────────────┐                                   │
+│                                │ Return      │                                   │
+│                                │ Success     │                                   │
+│                                └─────────────┘                                   │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Input esperado:**
+### 2.2 Inventario Completo de Nodos
+
+| # | Nodo | Tipo | Función |
+|---|------|------|---------|
+| 1 | **Webhook: Order Manager** | `webhook` | Recibe POST en `/order-manager` |
+| 2 | **Parse Request** | `code` | Extrae phone, captured_data, promo, source, callbell_info |
+| 3 | **Check Order Exists** | `postgres` | Verifica si `order_created=true` en sesión (últimos 3 días) |
+| 4 | **Order Already Created?** | `if` | Condición: `skip_order === true` |
+| 5 | **Validate Data** | `code` | Verifica 6 campos obligatorios |
+| 6 | **IF: Valid Data?** | `if` | Bifurca según validación |
+| 7 | **Prepare Bigin Order** | `code` | Construye payload con precios y fechas |
+| 8 | **Create Order in Bigin** | `httpRequest` | POST a `robot-api.local:3000/bigin/create-order` |
+| 9 | **Log Order Created** | `code` | Extrae order_name, order_id, order_url |
+| 10 | **Arreglar Callbell** | `code` | Prepara actualización de contacto |
+| 11 | **HTTP: Add RB Tag** | `httpRequest` | PATCH a Callbell API (tags + custom fields) |
+| 12 | **Update Order Created Flag** | `postgres` | Actualiza state con timestamp |
+| 13 | **Mark Order Created** | `postgres` | `order_created = true` en state |
+| 14 | **Return Success** | `respondToWebhook` | Retorna éxito con datos de orden |
+| 15 | **Return Error** | `respondToWebhook` | Retorna error con campos faltantes |
+| 16 | **Return Already Created** | `respondToWebhook` | Retorna que orden ya existe |
+
+---
+
+## 3. ENDPOINTS
+
+### 3.1 Endpoint Principal
+
+```
+POST http://localhost:5678/webhook/order-manager
+```
+
+**Headers:**
+```
+Content-Type: application/json
+```
+
+**Payload de Entrada:**
 ```json
 {
-  "phone": "57...",
+  "phone": "573001234567",
   "captured_data": {
     "nombre": "Juan",
-    "apellido": "Perez",
-    "telefono": "573137549286",
+    "apellido": "Pérez",
+    "telefono": "573001234567",
     "direccion": "Calle 123 #45-67",
+    "barrio": "Centro",
     "ciudad": "Bogotá",
     "departamento": "Cundinamarca",
-    "barrio": "Centro",
     "correo": "juan@email.com",
-    "pack": "2x"
+    "pack": "2x",
+    "precio": 109900
   },
-  "promo_override": null,
+  "promo": "2x",
   "source": "historial_v3",
-  "callbell_conversation_href": "https://...",
-  "contact_id": "..."
+  "callbell_conversation_href": "https://dash.callbell.eu/conversations/abc123",
+  "contact_id": "contact_uuid_789"
 }
 ```
 
-**Parse Request:**
+**Respuesta Exitosa:**
+```json
+{
+  "success": true,
+  "order": {
+    "id": "12345678901234567890",
+    "name": "Juan Pérez",
+    "url": "https://crm.zoho.com/bigin/...",
+    "amount": 109900,
+    "promo": "2x"
+  },
+  "callbell_updated": true
+}
+```
+
+**Respuesta Error (datos incompletos):**
+```json
+{
+  "success": false,
+  "error": "missing_fields",
+  "missing": ["direccion", "departamento"]
+}
+```
+
+**Respuesta Error (orden existente):**
+```json
+{
+  "success": false,
+  "error": "order_already_exists",
+  "existing_order_at": "2026-01-20T15:30:00.000Z"
+}
+```
+
+### 3.2 Endpoints Consumidos
+
+| Servicio | Endpoint | Método | Propósito |
+|----------|----------|--------|-----------|
+| Robot API | `http://robot-api.local:3000/bigin/create-order` | POST | Crear orden en Bigin |
+| Callbell API | `https://api.callbell.eu/v1/contacts/{uuid}` | PATCH | Actualizar tags |
+
+---
+
+## 4. LÓGICA DE NEGOCIO
+
+### 4.1 Campos Obligatorios
+
 ```javascript
-const phone = body.phone;
-const capturedData = body.captured_data || {};
-const promoOverride = body.promo_override || null;  // Force specific promo
-const source = body.source || 'unknown';
-const callbellConversationHref = body.callbell_conversation_href || '';
-const contactId = body.contact_id || '';
+const REQUIRED_FIELDS = [
+  'nombre',
+  'apellido',
+  'telefono',
+  'direccion',
+  'ciudad',
+  'departamento'
+];
 
-// Determine promo: override takes priority, then captured_data.pack
-let promo = promoOverride || capturedData.pack || null;
+function validateRequiredFields(data) {
+  const missing = [];
+
+  for (const field of REQUIRED_FIELDS) {
+    if (!data[field] || data[field].trim() === '' || data[field] === 'N/A') {
+      missing.push(field);
+    }
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing
+  };
+}
 ```
 
-### 2. Validación de Datos
-```
-Parse Request → Validate Data
-```
+### 4.2 Mapeo de Precios
 
-**Campos mínimos requeridos:**
 ```javascript
-const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];
-const missingFields = minimumFields.filter(f =>
-  !capturedData[f] || capturedData[f].trim() === ''
-);
-
-const isValid = missingFields.length === 0;
-```
-
-### 3. IF: Valid Data?
-```
-Validate Data → IF: Valid Data?
-  ├─ TRUE → Prepare Bigin Order
-  └─ FALSE → Return Error
-```
-
-### 4. Preparación del Pedido
-```
-Prepare Bigin Order
-```
-
-**Mapping de promos a precios:**
-```javascript
-const promoAmounts = {
+const PROMO_PRICES = {
   '1x': 77900,
   '1X': 77900,
   '2x': 109900,
   '2X': 109900,
   '3x': 139900,
   '3X': 139900,
-  'WPP': 0  // Sin promo
+  'WPP': 0  // Sin pack seleccionado
 };
 
-const promoNormalized = promo.toUpperCase();
-const amount = promoAmounts[promoNormalized] || 0;
-```
-
-**Nombre de la orden:**
-```javascript
-// SOLO "Nombre Apellido" (sin promo)
-const ordenName = `${captured.nombre} ${captured.apellido}`.trim();
-```
-
-**Fecha de cierre (hoy):**
-```javascript
-const today = new Date();
-const closingDate = `${String(today.getDate()).padStart(2, '0')}/${String(today.getMonth() + 1).padStart(2, '0')}/${today.getFullYear()}`;
-// Formato: DD/MM/YYYY
-```
-
-**Body del pedido:**
-```json
-{
-  "ordenName": "Juan Perez",
-  "stage": "Nuevo Ingreso",
-  "closingDate": "17/01/2026",
-  "amount": 109900,
-  "telefono": "573137549286",
-  "direccion": "Calle 123 #45-67",
-  "municipio": "Bogotá",
-  "departamento": "Cundinamarca",
-  "email": "juan@email.com",
-  "description": "WPP",
-  "callBell": "https://dash.callbell.eu/..."
+function getPrice(promo) {
+  return PROMO_PRICES[promo] || 0;
 }
 ```
 
-**Campos clave:**
-- `stage`: Siempre "Nuevo Ingreso"
-- `description`: Siempre "WPP" (la promo está implícita en el precio)
-- `callBell`: Link a la conversación de Callbell
+### 4.3 Preparación de Orden Bigin
 
-### 5. Creación en Bigin
-```
-Prepare Bigin Order → Create Order in Bigin
+```javascript
+function prepareBiginOrder(data, promo) {
+  const today = new Date();
+  const closingDate = formatDate(today, 'DD/MM/YYYY');
+
+  return {
+    order_name: `${data.nombre} ${data.apellido}`,
+    stage: 'Nuevo Ingreso',
+    closing_date: closingDate,
+    amount: getPrice(promo),
+    description: 'WPP',
+    contact: {
+      nombre: data.nombre,
+      apellido: data.apellido,
+      telefono: data.telefono,
+      email: data.correo || '',
+      direccion: data.direccion,
+      barrio: data.barrio || '',
+      ciudad: data.ciudad,
+      departamento: data.departamento
+    },
+    metadata: {
+      source: 'v3dsl_bot',
+      promo: promo,
+      callbell_href: data.callbell_conversation_href
+    }
+  };
+}
 ```
 
-**API Call:**
+### 4.4 Verificación de Orden Existente
+
+```javascript
+// Query PostgreSQL
+const CHECK_ORDER_QUERY = `
+  SELECT
+    session_id,
+    state->>'order_created' as order_created,
+    state->>'order_created_at' as order_created_at
+  FROM sessions_v3
+  WHERE phone = $1
+    AND status = 'active'
+    AND created_at > NOW() - INTERVAL '3 days'
+    AND (state->>'order_created')::boolean = true
+  LIMIT 1
+`;
+
+function shouldSkipOrder(result) {
+  if (result && result.order_created === 'true') {
+    return {
+      skip: true,
+      existing_at: result.order_created_at
+    };
+  }
+  return { skip: false };
+}
+```
+
+### 4.5 Actualización de Callbell
+
+```javascript
+// Tags a agregar
+const TAGS_TO_ADD = ['WPP', 'RB'];
+
+// Custom fields a actualizar
+function prepareCallbellUpdate(orderData) {
+  return {
+    tags: TAGS_TO_ADD,
+    custom_fields: {
+      bigin_order_url: orderData.url,
+      order_amount: orderData.amount,
+      order_date: new Date().toISOString()
+    }
+  };
+}
+
+// PATCH request
+async function updateCallbellContact(contactUuid, updateData) {
+  const response = await fetch(
+    `https://api.callbell.eu/v1/contacts/${contactUuid}`,
+    {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${CALLBELL_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updateData)
+    }
+  );
+  return response.json();
+}
+```
+
+---
+
+## 5. INTEGRACIÓN CON ROBOT API
+
+### 5.1 Endpoint Robot API
+
 ```
 POST http://robot-api.local:3000/bigin/create-order
-Content-Type: application/json
-Timeout: 180 segundos (3 minutos)
-
-Body: {order_body}
 ```
 
-**Response esperado:**
+**Timeout:** 180 segundos (Bigin automation es lenta)
+
+### 5.2 Payload a Robot API
+
 ```json
 {
-  "success": true,
-  "data": {
-    "ordenName": "Juan Perez",
-    "orderId": "123456",
-    "orderUrl": "https://crm.zoho.com/crm/.../123456"
+  "order_name": "Juan Pérez",
+  "stage": "Nuevo Ingreso",
+  "closing_date": "21/01/2026",
+  "amount": 109900,
+  "description": "WPP",
+  "contact": {
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "telefono": "573001234567",
+    "email": "juan@email.com",
+    "direccion": "Calle 123 #45-67",
+    "barrio": "Centro",
+    "ciudad": "Bogotá",
+    "departamento": "Cundinamarca"
+  },
+  "metadata": {
+    "source": "v3dsl_bot",
+    "promo": "2x",
+    "callbell_href": "https://dash.callbell.eu/conversations/abc123"
   }
 }
 ```
 
-### 6. Marcar Orden Creada
-```
-Create Order in Bigin → Mark Order Created
+### 5.3 Respuesta de Robot API
+
+```json
+{
+  "success": true,
+  "order": {
+    "id": "12345678901234567890",
+    "name": "Juan Pérez",
+    "url": "https://crm.zoho.com/bigin/org123/tab/Potentials/12345678901234567890"
+  }
+}
 ```
 
-**SQL Update:**
+### 5.4 Manejo de Errores Robot API
+
+| Error | Causa | Manejo |
+|-------|-------|--------|
+| Timeout | Bigin lento | Reintentar 1 vez |
+| Session expired | Bigin login expirado | Robot API hace re-login |
+| Duplicate | Orden ya existe en Bigin | Marcar como creada |
+| Validation | Datos inválidos para Bigin | Retornar error |
+
+---
+
+## 6. ACTUALIZACIÓN DE BASE DE DATOS
+
+### 6.1 Query de Actualización
+
 ```sql
 UPDATE sessions_v3
-SET state = jsonb_set(
-  jsonb_set(
-    COALESCE(state, captured_data, '{}'::jsonb),
-    '{order_created}',
-    'true'::jsonb
+SET
+  state = state || jsonb_build_object(
+    'order_created', true,
+    'order_created_at', NOW()::text,
+    'order_id', $2,
+    'order_url', $3,
+    'order_promo', $4,
+    'order_amount', $5
   ),
-  '{order_created_at}',
-  to_jsonb(NOW()::text)
-)
-WHERE phone = '{{phone}}' AND status = 'active'
-RETURNING *
+  updated_at = NOW()
+WHERE phone = $1
+  AND status = 'active';
 ```
 
-**Efecto:**
+### 6.2 Campos Actualizados en State
+
 ```json
 {
-  "captured_data": {
-    ...campos anteriores...,
-    "order_created": true,
-    "order_created_at": "2026-01-17T00:26:00.000Z"
-  }
-}
-```
-
-### 7. Return Success
-```
-Mark Order Created → Return Success
-```
-
-**Response:**
-```json
-{
-  "success": true,
   "order_created": true,
-  "order_name": "Juan Perez",
-  "phone": "57...",
-  "amount": 109900,
-  "source": "historial_v3",
-  "bigin_response": {
-    "data": {
-      "ordenName": "Juan Perez",
-      "orderId": "123456",
-      "orderUrl": "https://..."
-    }
+  "order_created_at": "2026-01-21T10:30:00.000Z",
+  "order_id": "12345678901234567890",
+  "order_url": "https://crm.zoho.com/bigin/...",
+  "order_promo": "2x",
+  "order_amount": 109900
+}
+```
+
+---
+
+## 7. MANEJO DE ERRORES
+
+### 7.1 Errores Esperados
+
+| Error | Causa | Respuesta |
+|-------|-------|-----------|
+| `missing_fields` | Campos obligatorios faltantes | `{ success: false, missing: [...] }` |
+| `order_already_exists` | Orden creada previamente | `{ success: false, existing_order_at: "..." }` |
+| `bigin_timeout` | Robot API timeout | Retry o error |
+| `bigin_error` | Error en creación CRM | `{ success: false, error: "bigin_failed" }` |
+| `callbell_error` | Error actualizando contacto | Log pero no falla la orden |
+
+### 7.2 Estrategia de Retry
+
+```javascript
+const RETRY_CONFIG = {
+  bigin: {
+    maxAttempts: 2,
+    delay: 5000 // 5 segundos entre intentos
+  },
+  callbell: {
+    maxAttempts: 3,
+    delay: 1000
   }
+};
+```
+
+---
+
+## 8. MÉTRICAS Y LOGGING
+
+### 8.1 Eventos Logueados
+
+| Evento | Datos |
+|--------|-------|
+| `order_requested` | phone, promo, source |
+| `validation_failed` | phone, missing_fields |
+| `order_skipped` | phone, reason (already_exists) |
+| `bigin_request` | order_name, amount |
+| `bigin_success` | order_id, order_url, latency_ms |
+| `bigin_error` | error_type, error_message |
+| `callbell_updated` | contact_uuid, tags_added |
+| `db_updated` | session_id, fields_updated |
+
+---
+
+## 9. CONSIDERACIONES PARA MORFX
+
+### 9.1 Abstracción de CRM
+
+```typescript
+interface CRMIntegration {
+  createOrder(order: Order): Promise<CreateOrderResult>;
+  updateOrder(orderId: string, updates: Partial<Order>): Promise<void>;
+  getOrder(orderId: string): Promise<Order | null>;
+}
+
+interface Order {
+  name: string;
+  stage: string;
+  amount: number;
+  closingDate: Date;
+  contact: Contact;
+  metadata: Record<string, any>;
+}
+
+// Implementaciones por CRM
+class BiginCRM implements CRMIntegration { ... }
+class HubspotCRM implements CRMIntegration { ... }
+class SalesforceCRM implements CRMIntegration { ... }
+class CustomCRM implements CRMIntegration { ... }
+```
+
+### 9.2 Configuración de Productos por Tenant
+
+```typescript
+interface ProductConfig {
+  tenantId: string;
+  products: Product[];
+  pricingRules: PricingRule[];
+  stages: Stage[];
+}
+
+interface Product {
+  sku: string;
+  name: string;
+  basePrice: number;
+  variants: ProductVariant[];
+}
+
+interface ProductVariant {
+  code: string; // "1x", "2x", "3x"
+  quantity: number;
+  price: number;
+  discount: number;
 }
 ```
 
-### 8. Return Error (Si falla validación)
-```
-Return Error
-```
+### 9.3 Pipeline de Órdenes
 
-**Response:**
-```json
-{
-  "success": false,
-  "order_created": false,
-  "error": "Invalid data: missing required fields",
-  "missing_fields": ["ciudad", "departamento"],
-  "phone": "57..."
+```typescript
+interface OrderPipeline {
+  stages: PipelineStage[];
+  transitions: StageTransition[];
+  automations: StageAutomation[];
 }
+
+interface PipelineStage {
+  id: string;
+  name: string;
+  order: number;
+  probability: number;
+  actions: StageAction[];
+}
+
+// Ejemplo de pipeline Somnio
+const SOMNIO_PIPELINE: OrderPipeline = {
+  stages: [
+    { id: 'nuevo', name: 'Nuevo Ingreso', order: 1, probability: 10 },
+    { id: 'confirmado', name: 'Confirmado', order: 2, probability: 50 },
+    { id: 'enviado', name: 'Enviado', order: 3, probability: 80 },
+    { id: 'entregado', name: 'Entregado', order: 4, probability: 100 },
+    { id: 'cancelado', name: 'Cancelado', order: 99, probability: 0 }
+  ],
+  transitions: [
+    { from: 'nuevo', to: 'confirmado', trigger: 'manual' },
+    { from: 'confirmado', to: 'enviado', trigger: 'shipping_created' },
+    { from: 'enviado', to: 'entregado', trigger: 'delivery_confirmed' }
+  ]
+};
 ```
 
-## 💰 Tabla de Precios
+### 9.4 Webhooks de Eventos
 
-| Pack | Precio COP |
-|------|-----------|
-| 1x   | $77,900   |
-| 2x   | $109,900  |
-| 3x   | $139,900  |
-| WPP  | $0        |
+```typescript
+interface OrderWebhook {
+  event: 'order.created' | 'order.updated' | 'order.stage_changed';
+  payload: OrderEventPayload;
+  timestamp: Date;
+  signature: string;
+}
 
-**WPP:** Cliente con datos completos pero sin pack seleccionado.
+interface OrderEventPayload {
+  orderId: string;
+  tenantId: string;
+  previousState?: Partial<Order>;
+  currentState: Order;
+  triggeredBy: string;
+}
 
-## 🎯 Casos de Uso
-
-### Caso 1: Orden Normal (con pack)
+// Endpoints para recibir eventos de CRM
+const ORDER_WEBHOOKS = {
+  'bigin.order.updated': '/webhooks/bigin/order-updated',
+  'bigin.stage.changed': '/webhooks/bigin/stage-changed'
+};
 ```
-Input:
-  pack: "2x"
-  captured_data: {nombre, apellido, telefono, direccion, ciudad, departamento, correo}
-
-Validation: ✅ Campos completos
-Prepare: ordenName = "Juan Perez", amount = 109900
-Create: POST a robot-api.local
-Mark: order_created = true
-Output: {success: true, order_name: "Juan Perez"}
-```
-
-### Caso 2: Orden sin Pack (WPP)
-```
-Input:
-  promo_override: "WPP"
-  captured_data: {nombre, apellido, telefono, direccion, ciudad, departamento}
-
-Validation: ✅ Campos mínimos completos
-Prepare: ordenName = "Juan Perez", amount = 0, description = "WPP"
-Create: POST a robot-api.local
-Output: {success: true, order_name: "Juan Perez"}
-```
-
-### Caso 3: Datos Incompletos
-```
-Input:
-  captured_data: {nombre, apellido}  // ⚠️ Falta telefono, direccion, etc.
-
-Validation: ❌ Missing fields
-Output: {success: false, error: "Invalid data", missing_fields: [...]}
-```
-
-## 🔗 Integraciones
-
-### Robot API (Bigin CRM)
-- **Endpoint:** `http://robot-api.local:3000/bigin/create-order`
-- **Method:** POST
-- **Timeout:** 180 segundos
-- **Purpose:** Crear pedido en Bigin CRM (Zoho)
-
-### PostgreSQL
-- **Update:** sessions_v3 table
-- **Purpose:** Marcar order_created flag
-
-## 📊 Flujo de Datos
-
-```
-Historial v3 (Should Create Order?)
-  ↓
-Order Manager (valida + prepara)
-  ↓
-Robot API (crea en Bigin CRM)
-  ↓
-PostgreSQL (marca order_created)
-  ↓
-Response → Historial v3
-```
-
-## ⚙️ Configuración
-
-### Credenciales n8n
-- **Postgres:** `Postgres Historial v3`
-
-### Variables de Entorno (Robot API)
-```bash
-ROBOT_API_URL=http://robot-api.local:3000
-BIGIN_API_KEY=...
-BIGIN_ORG_ID=...
-```
-
-## 📈 Métricas y Logs
-
-### Console Logs
-- `📥 ORDER MANAGER TRIGGERED` - Request recibido
-- `Source: historial_v3` - Fuente del request
-- `Phone: 57...` - Teléfono del cliente
-- `✅ VALIDATING DATA FOR ORDER` - Validación iniciada
-- `Minimum fields complete: true/false` - Estado de validación
-- `Missing fields: [...]` - Campos faltantes
-- `📦 PREPARING BIGIN ORDER` - Preparación del pedido
-- `Promo: 2x` - Promo/Pack detectado
-- `Callbell link: https://...` - Link de conversación
-
-## 🚨 Errores Comunes
-
-### Error: "Missing required fields"
-**Causa:** Datos incompletos
-**Solución:** Retorna error 400, no crea orden
-
-### Error: "Robot API timeout"
-**Causa:** Bigin API lenta o caída
-**Solución:** Timeout 180s, retry manual si falla
-
-### Error: "Order already created"
-**Causa:** order_created === true
-**Solución:** Historial v3 verifica antes de llamar
-
-## 🔗 Dependencias
-
-**Order Manager depende de:**
-- Robot API (Bigin CRM)
-- PostgreSQL (sessions_v3)
-- Historial v3 (llamado por)
-
-**Workflows que dependen de Order Manager:**
-- Historial v3 (llama cuando crear orden)
-- Proactive Timers (llama para órdenes pendientes)
-
-## 📝 Notas Importantes
-
-1. **Validación estricta:** 6 campos mínimos requeridos
-2. **Promo override:** Permite forzar promo específica (ej: WPP)
-3. **Idempotencia:** order_created flag evita duplicados
-4. **Link de Callbell:** Guardado en campo callBell de Bigin
-5. **Timeout generoso:** 180s para esperar respuesta de Bigin
-6. **Description siempre WPP:** La promo está implícita en el precio
-7. **Fecha automática:** Usa fecha actual como closing date

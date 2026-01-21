@@ -1,939 +1,836 @@
-# 🏗️ Arquitectura General - Sistema v3DSL
+# ARQUITECTURA GENERAL - SISTEMA v3DSL
 
-## 📋 Índice
-
-1. [Visión General](#visión-general)
-2. [Componentes del Sistema](#componentes-del-sistema)
-3. [Flujo de Datos Completo](#flujo-de-datos-completo)
-4. [Base de Datos](#base-de-datos)
-5. [Integraciones Externas](#integraciones-externas)
-6. [Diagramas de Arquitectura](#diagramas-de-arquitectura)
-7. [Gestión de Estado](#gestión-de-estado)
-8. [Sistema de Intents](#sistema-de-intents)
+> **Versión:** 3.0
+> **Última actualización:** 2026-01-21
+> **Propósito:** Documentación de referencia para plataforma MorfX
 
 ---
 
-## 1. Visión General
+## 1. VISIÓN GENERAL DEL SISTEMA
 
-### 🎯 Propósito del Sistema
+### 1.1 ¿Qué es v3DSL?
 
-Sistema de bot conversacional inteligente para **Somnio** (Elixir del Sueño) que automatiza la atención al cliente, captura de datos, y creación de pedidos en WhatsApp.
+v3DSL (versión 3 Domain Specific Language) es un **sistema de agentes conversacionales autónomos** diseñado para automatizar ventas por WhatsApp. El sistema utiliza una arquitectura de microservicios orquestados donde cada agente tiene una responsabilidad específica y se comunica con los demás vía webhooks HTTP.
 
-### 🛠️ Stack Tecnológico
+### 1.2 Caso de Uso: Somnio
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    STACK TECNOLÓGICO                        │
-├─────────────────────────────────────────────────────────────┤
-│  • n8n              → Orquestación de workflows             │
-│  • PostgreSQL       → Base de datos principal               │
-│  • Claude AI        → LLM para detección de intents        │
-│  • Callbell API     → Gestión de WhatsApp                   │
-│  • Bigin CRM        → Sistema de pedidos (Zoho)             │
-│  • Playwright       → Automatización del CRM                │
-└─────────────────────────────────────────────────────────────┘
-```
+El sistema está implementado para **Somnio** (Elixir del Sueño), un producto de bienestar vendido directamente por WhatsApp. El bot "Carolina" maneja el ciclo completo: desde el saludo inicial hasta la creación de la orden en el CRM.
 
-### 📊 Métricas Clave
+### 1.3 Stack Tecnológico
 
-- **Tiempo de respuesta:** < 3 segundos (promedio)
-- **Tasa de conversión:** ~70% (de hola → compra confirmada)
-- **Capacidad:** Múltiples conversaciones simultáneas
-- **Disponibilidad:** 24/7 con recuperación automática
+| Componente | Tecnología | Propósito |
+|------------|------------|-----------|
+| Orquestación | n8n | Workflows visuales de automatización |
+| Base de datos | PostgreSQL | Persistencia de sesiones y mensajes |
+| IA | Claude API (Anthropic) | Análisis de intents y extracción de datos |
+| Mensajería | Callbell | Gateway WhatsApp Business |
+| CRM | Zoho Bigin | Gestión de órdenes y clientes |
+| Automatización CRM | Playwright (Robot API) | Interacción programática con Bigin |
 
 ---
 
-## 2. Componentes del Sistema
+## 2. ARQUITECTURA DE AGENTES
 
-### 2.1 Workflows Principales
-
-```
-┌────────────────────────────────────────────────────────────┐
-│                   WORKFLOWS PRINCIPALES                    │
-└────────────────────────────────────────────────────────────┘
-
-1. HISTORIAL V3 (Orquestador)
-   ├─ Receptor de mensajes de Callbell
-   ├─ Gestor de sesiones en PostgreSQL
-   ├─ Orquestador de flujo completo
-   └─ Trigger de workflows secundarios
-
-2. CAROLINA V3 (Generador de Respuestas)
-   ├─ Selector de plantillas según intent
-   ├─ Enviador de mensajes con delays
-   ├─ Prevención de interrupciones
-   └─ Gestión de tags de Callbell
-```
-
-### 2.2 Workflows Auxiliares
+### 2.1 Diagrama de Alto Nivel
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                  WORKFLOWS AUXILIARES                      │
-└────────────────────────────────────────────────────────────┘
+                                    ┌─────────────────────────────────────────────────────────────┐
+                                    │                     SISTEMA v3DSL                           │
+                                    └─────────────────────────────────────────────────────────────┘
 
-3. STATE ANALYZER
-   ├─ Detecta intenciones con Claude AI
-   ├─ Valida flujo transaccional
-   └─ Actualiza intents_vistos
-
-4. DATA EXTRACTOR
-   ├─ Extrae datos personales con Claude AI
-   ├─ Limpia y normaliza datos
-   └─ Detecta negaciones
-
-5. ORDER MANAGER
-   ├─ Valida datos mínimos
-   ├─ Crea pedidos en Bigin CRM
-   └─ Marca order_created
-
-6. SNAPSHOT
-   ├─ API de solo lectura
-   ├─ Retorna estado actual
-   └─ Calcula pending messages
-
-7. PROACTIVE TIMERS (⚠️ NO ACTIVAR aún)
-   ├─ Recordatorios automáticos
-   ├─ Órdenes automáticas
-   └─ Gestión de timers
+     ┌─────────────┐                                                                    ┌─────────────┐
+     │   CALLBELL  │                                                                    │    BIGIN    │
+     │  (WhatsApp) │                                                                    │    (CRM)    │
+     └──────┬──────┘                                                                    └──────▲──────┘
+            │                                                                                  │
+            │ webhook                                                                          │ HTTP
+            ▼                                                                                  │
+┌───────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                                                                                       │
+│   ┌───────────────────────────────────────────────────────────────────────────────────────────────┐   │
+│   │                                    HISTORIAL V3                                               │   │
+│   │                              (Orquestador Central)                                            │   │
+│   │                                                                                               │   │
+│   │  • Recibe webhooks de Callbell                                                               │   │
+│   │  • Valida y filtra mensajes                                                                  │   │
+│   │  • Gestiona sesiones PostgreSQL                                                              │   │
+│   │  • Coordina llamadas a agentes                                                               │   │
+│   │  • Dispara respuestas y órdenes                                                              │   │
+│   └───────────────────────────────────────────────────────────────────────────────────────────────┘   │
+│                    │                    │                    │                    │                   │
+│                    │ POST               │ POST               │ POST               │ POST              │
+│                    ▼                    ▼                    ▼                    ▼                   │
+│   ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐ ┌──────────────────────┐ │
+│   │    STATE ANALYZER    │ │    DATA EXTRACTOR    │ │    ORDER MANAGER     │ │     CAROLINA V3      │ │
+│   │                      │ │                      │ │                      │ │                      │ │
+│   │  • Detecta intent    │ │  • Extrae datos      │ │  • Valida campos     │ │  • Selecciona        │ │
+│   │  • Valida flujo      │ │  • Normaliza info    │ │  • Crea orden Bigin  │ │    templates         │ │
+│   │  • Usa Claude AI     │ │  • Detecta negaciones│ │  • Actualiza tags    │ │  • Envía mensajes    │ │
+│   │  • Retorna mode      │ │  • Mergea datos      │ │  • Marca creación    │ │  • Detecta           │ │
+│   │                      │ │                      │ │                      │ │    interrupciones    │ │
+│   └──────────────────────┘ └──────────────────────┘ └──────────────────────┘ └──────────────────────┘ │
+│                                                                                        │              │
+│                                                                                        │ GET          │
+│                                                                                        ▼              │
+│                                                                           ┌──────────────────────┐    │
+│                                                                           │      SNAPSHOT        │    │
+│                                                                           │                      │    │
+│                                                                           │  • Estado read-only  │    │
+│                                                                           │  • Versionamiento    │    │
+│                                                                           │  • Pending messages  │    │
+│                                                                           └──────────────────────┘    │
+│                                                                                        ▲              │
+│                                                                                        │              │
+│   ┌───────────────────────────────────────────────────────────────────────────────────┘              │
+│   │                                                                                                   │
+│   │   ┌──────────────────────┐                                                                       │
+│   │   │   PROACTIVE TIMER    │                                                                       │
+│   │   │                      │                                                                       │
+│   │   │  • Loop temporal     │                                                                       │
+│   │   │  • Recordatorios     │                                                                       │
+│   │   │  • Auto-promociones  │                                                                       │
+│   │   │  • Órdenes auto      │                                                                       │
+│   │   └──────────────────────┘                                                                       │
+│                                                                                                       │
+└───────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                │
+                                                │
+                                                ▼
+                                    ┌─────────────────────────────────────┐
+                                    │           POSTGRESQL                │
+                                    │                                     │
+                                    │  ┌───────────────┐ ┌─────────────┐  │
+                                    │  │ sessions_v3   │ │ messages_v3 │  │
+                                    │  └───────────────┘ └─────────────┘  │
+                                    └─────────────────────────────────────┘
 ```
+
+### 2.2 Tabla de Agentes
+
+| Agente | Endpoint | Responsabilidad | Trigger |
+|--------|----------|-----------------|---------|
+| **Historial V3** | `POST /historial-v3-callbell-webhook` | Orquestación central | Webhook Callbell |
+| **State Analyzer** | `POST /state-analyzer` | Detección de intents | Historial V3 |
+| **Data Extractor** | `POST /data-extractor` | Extracción de datos | Historial V3 |
+| **Order Manager** | `POST /order-manager` | Creación de órdenes | Historial V3 |
+| **Carolina V3** | `POST /carolina-v3-process` | Envío de respuestas | Historial V3 |
+| **Snapshot** | `GET /historial-v3-snapshot` | Consulta de estado | Carolina V3, Timer |
+| **Proactive Timer** | `POST /proactive-timer-instance` | Acciones temporales | Historial V3 |
 
 ---
 
-## 3. Flujo de Datos Completo
+## 3. FLUJO DE DATOS COMPLETO
 
-### 3.1 Vista de Alto Nivel
-
-```
-┌───────────────────────────────────────────────────────────────┐
-│                    FLUJO DE DATOS COMPLETO                     │
-└───────────────────────────────────────────────────────────────┘
-
-ENTRADA (Cliente envía mensaje)
-   │
-   ▼
-┌──────────────────────────────────┐
-│  1. Callbell Webhook             │
-│     POST /historial-v3-webhook   │
-└──────────┬───────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│  2. HISTORIAL V3 (Orquestador)                               │
-├──────────────────────────────────────────────────────────────┤
-│  ✓ Filtros Iniciales:                                        │
-│    ├─ Direction = "inbound" (solo mensajes entrantes)       │
-│    ├─ Tags bloqueados (WPP, P/W, RECO, bot_off)             │
-│    └─ Timestamp (< 2 min, evita duplicados)                 │
-│                                                              │
-│  ✓ Gestión de Sesión:                                       │
-│    ├─ Buscar sesión existente por phone                     │
-│    ├─ Crear nueva sesión si no existe                       │
-│    └─ Actualizar last_activity                              │
-│                                                              │
-│  ✓ Guardar Mensaje:                                         │
-│    ├─ INSERT en messages_v3                                 │
-│    ├─ Validar callbell_message_id UNIQUE                    │
-│    └─ Incrementar version counter                           │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ├──────────────────────────────────────────────────┐
-           │                                                  │
-           ▼                                                  ▼
-┌────────────────────────┐                    ┌────────────────────────┐
-│  3A. STATE ANALYZER    │                    │  3B. DATA EXTRACTOR    │
-│  (Siempre se ejecuta)  │                    │  (Solo si collecting)  │
-├────────────────────────┤                    ├────────────────────────┤
-│  INPUT:                │                    │  INPUT:                │
-│  • Historial completo  │                    │  • Mensaje actual      │
-│  • Pending messages    │                    │  • State existente     │
-│  • Intents vistos      │                    │                        │
-│  • Captured data       │                    │  PROCESS:              │
-│                        │                    │  • Claude extrae 8     │
-│  PROCESS:              │                    │    campos              │
-│  • Claude detecta      │                    │  • Limpia datos        │
-│    intent actual       │                    │  • Normaliza formato   │
-│  • Valida flujo        │                    │  • Detecta negaciones  │
-│  • Auto-detecta        │                    │                        │
-│    transaccionales     │                    │  OUTPUT:               │
-│                        │                    │  • Datos extraídos     │
-│  OUTPUT:               │                    │    y limpios           │
-│  • Intent detectado    │                    └────────────┬───────────┘
-│  • Intents vistos      │                                 │
-│    actualizados        │                                 │
-│  • Pack detectado      │                                 │
-│  • Campos completos    │                                 │
-└────────────┬───────────┘                                 │
-             │                                             │
-             └───────────────────┬─────────────────────────┘
-                                 │
-                                 ▼
-┌──────────────────────────────────────────────────────────────┐
-│  4. MERGE DATA                                               │
-│     Combina: State Analyzer + Data Extractor                 │
-│     → state = {                                              │
-│         _last_intent,                                        │
-│         _intents_vistos,                                     │
-│         pack,                                                │
-│         nombre, apellido, telefono, ...                      │
-│       }                                                      │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│  5. UPDATE STATE                                             │
-│     UPDATE sessions_v3                                       │
-│     SET state = $state,                                      │
-│         mode = $mode,                                        │
-│         version = version + 1                                │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│  6. DECISION: ¿Crear Orden?                                  │
-│     IF pack detectado + 6 campos mínimos + NOT order_created│
-│        → Call Order Manager                                  │
-└──────────┬───────────────────────────────────────────────────┘
-           │ (solo si aplica)
-           ▼
-┌────────────────────────┐
-│  7. ORDER MANAGER      │
-│     (Opcional)         │
-├────────────────────────┤
-│  • Valida datos        │
-│  • Llama Robot API     │
-│  • Crea orden en Bigin │
-│  • Marca order_created │
-└────────────┬───────────┘
-             │
-             └─────────────────────────┐
-                                       │
-                                       ▼
-┌──────────────────────────────────────────────────────────────┐
-│  8. TRIGGER CAROLINA V3                                      │
-│     POST /carolina-v3-process                                │
-│     Body: { phone: "573..." }                                │
-└──────────┬───────────────────────────────────────────────────┘
-           │
-           ▼
-┌──────────────────────────────────────────────────────────────┐
-│  9. CAROLINA V3 (Generador de Respuestas)                    │
-├──────────────────────────────────────────────────────────────┤
-│  ✓ Get Snapshot:                                             │
-│    ├─ Obtiene sesión + mensajes                             │
-│    ├─ Calcula pending_count                                 │
-│    └─ Verifica version                                       │
-│                                                              │
-│  ✓ Validaciones:                                             │
-│    ├─ pending_count > 0 (hay mensajes sin responder)        │
-│    ├─ Tags NO bloqueados                                    │
-│    └─ Intent válido en state                                │
-│                                                              │
-│  ✓ Selección de Templates:                                  │
-│    ├─ Lee intent del state                                  │
-│    ├─ Determina si primera_vez o siguientes                 │
-│    ├─ Filtra templates ya enviados                          │
-│    └─ Obtiene lista de templates a enviar                   │
-│                                                              │
-│  ✓ Loop de Envío (con prevención de interrupciones):        │
-│    FOR EACH template:                                        │
-│      1. Wait (delay configurable)                           │
-│      2. Get Snapshot Fresh (version check)                  │
-│      3. IF version changed → ABORT (cliente interrumpió)    │
-│      4. Send to Callbell API                                │
-│      5. Save outbound en messages_v3                        │
-│      6. Increment version                                   │
-│                                                              │
-│  ✓ Post-Envío:                                              │
-│    ├─ Si confirmación → Add tag WPP (desactiva bot)         │
-│    └─ Log de finalización                                   │
-└──────────────────────────────────────────────────────────────┘
-           │
-           ▼
-┌────────────────────────┐
-│  10. Callbell API      │
-│      Envía a cliente   │
-└────────────────────────┘
-```
-
-### 3.2 Flujo Transaccional (Compra)
+### 3.1 Flujo de Mensaje Entrante
 
 ```
-CLIENTE                  SISTEMA                    CRM
-  │                        │                         │
-  ├─ "Quiero comprar" ───→│                         │
-  │                        ├─ Intent: captura_datos │
-  │                        ├─ Mode: collecting_data │
-  │                        │                         │
-  │←─ "¿Cuál es tu nombre?"│                         │
-  │                        │                         │
-  ├─ "Juan Pérez..." ────→│                         │
-  │                        ├─ Data Extractor ───────┤
-  │                        │   (extrae 8 campos)    │
-  │                        │                         │
-  │                        ├─ IF 8 campos completos │
-  │                        ├─ Intent: ofrecer_promos│
-  │                        │                         │
-  │←─ [Imagen 1x/2x/3x] ──│                         │
-  │                        │                         │
-  ├─ "El 2x" ────────────→│                         │
-  │                        ├─ Pack: "2x" detectado  │
-  │                        ├─ Intent: resumen_2x    │
-  │                        │                         │
-  │←─ "Confirma tu orden"─│                         │
-  │   "Nombre: Juan..."    │                         │
-  │   "Total: $XXX"        │                         │
-  │                        │                         │
-  ├─ "Sí confirmo" ──────→│                         │
-  │                        ├─ Intent: compra_conf.. │
-  │                        ├─ Call Order Manager ───┤
-  │                        │                         ├─ Crea orden
-  │                        │                         │   en Bigin
-  │                        │                         │
-  │←─ "Orden creada #123"─│←─ Order ID ─────────────┤
-  │   + Tag WPP (bot OFF)  │                         │
-  │                        │                         │
+1. RECEPCIÓN
+   Cliente → WhatsApp → Callbell → Webhook Historial V3
+
+2. VALIDACIÓN
+   Historial V3:
+   ├── Valida tags (WPP, P/W, RECO, bot_off)
+   ├── Valida antigüedad (<2 min)
+   ├── Valida dirección (inbound)
+   └── Si bloqueado → LOG y FIN
+
+3. PERSISTENCIA
+   Historial V3:
+   ├── Busca/Crea sesión en sessions_v3
+   ├── Incrementa version
+   └── Inserta mensaje en messages_v3
+
+4. ANÁLISIS
+   Historial V3 → State Analyzer:
+   ├── Envía historial + pending
+   ├── Claude detecta intent
+   ├── Valida transiciones
+   └── Retorna intent + mode
+
+5. EXTRACCIÓN (si mode = collecting_data)
+   Historial V3 → Data Extractor:
+   ├── Envía último mensaje
+   ├── Claude extrae datos
+   ├── Normaliza y mergea
+   └── Retorna datos actualizados
+
+6. ORDEN (si condiciones cumplidas)
+   Historial V3 → Order Manager:
+   ├── Valida campos mínimos
+   ├── Crea orden en Bigin
+   ├── Actualiza Callbell tags
+   └── Marca order_created
+
+7. RESPUESTA
+   Historial V3 → Carolina V3:
+   ├── Obtiene snapshot
+   ├── Selecciona templates por intent
+   ├── Loop de envío con delays
+   ├── Detecta interrupciones
+   └── Persiste outbound en historial
+```
+
+### 3.2 Flujo de Detección de Interrupciones
+
+```
+Carolina V3:
+1. Obtiene snapshot (version: 5)
+2. Entra al loop de mensajes
+
+   Para cada mensaje:
+   a. Wait (delay configurado)
+   b. GET snapshot → version actual
+   c. Si version ≠ 5 → INTERRUMPIR
+   d. Si version = 5 → Enviar mensaje
+   e. Persistir outbound en Historial
+
+3. Si interrumpido:
+   - Log interrupción
+   - Terminar loop
+   - Historial procesará nuevo mensaje
+   - Carolina se re-disparará con nuevo contexto
+```
+
+### 3.3 Flujo del Proactive Timer
+
+```
+Proactive Timer:
+1. Activación: Historial dispara cuando mode = collecting_data
+
+2. Loop (cada 2 min, max 20 iteraciones):
+   a. Query session state
+   b. Analizar condiciones:
+
+      Si 10 min sin datos:
+      → Enviar recordatorio_no_data
+
+      Si 6 min con datos parciales:
+      → Enviar request_missing_data
+
+      Si datos completos:
+      → Trigger Carolina con ofrecer_promos
+
+      Si 10 min sin selección de pack:
+      → Crear orden con promo WPP
+
+   c. Actualizar timestamps y flags
+   d. Evaluar should_continue
+
+3. Terminación:
+   - order_created = true
+   - max_iterations alcanzado
+   - timeout general (40 min)
 ```
 
 ---
 
-## 4. Base de Datos
+## 4. MODELO DE DATOS
 
-### 4.1 Esquema PostgreSQL
-
-#### Tabla: `sessions_v3`
+### 4.1 Tabla sessions_v3
 
 ```sql
 CREATE TABLE sessions_v3 (
-  session_id VARCHAR PRIMARY KEY,              -- phone
-  phone VARCHAR NOT NULL,
-  contact_id VARCHAR,                          -- Callbell contact UUID
-  callbell_conversation_href TEXT,             -- Link a conversación
-  business_id VARCHAR DEFAULT 'somnio',
+  -- Identificadores
+  session_id VARCHAR(100) PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL,
+  contact_id VARCHAR(100),
+  callbell_conversation_href TEXT,
 
-  -- Estado de la conversación
-  state JSONB DEFAULT '{}',                    -- Datos capturados + metadata
-  mode VARCHAR DEFAULT 'conversacion',         -- 'conversacion' | 'collecting_data'
-  tags TEXT[],                                 -- Tags de Callbell
-  status VARCHAR DEFAULT 'active',             -- 'active' | 'inactive'
+  -- Estado de conversación
+  state JSONB DEFAULT '{}',
+  mode VARCHAR(50) DEFAULT 'conversacion',
+  tags TEXT[] DEFAULT '{}',
+  status VARCHAR(20) DEFAULT 'active',
 
-  -- Control de versión (prevención de race conditions)
-  version INTEGER DEFAULT 0,
+  -- Control de concurrencia
+  version INTEGER DEFAULT 1,
 
   -- Timestamps
-  last_processed_at TIMESTAMP,
   created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
   last_activity TIMESTAMP DEFAULT NOW()
 );
 
+-- Índices
 CREATE INDEX idx_sessions_phone ON sessions_v3(phone);
 CREATE INDEX idx_sessions_status ON sessions_v3(status);
 CREATE INDEX idx_sessions_last_activity ON sessions_v3(last_activity);
 ```
 
-**Campos clave de `state` (JSONB):**
+### 4.2 Estructura del campo `state` (JSONB)
 
-```json
-{
-  "_last_intent": "resumen_2x",
-  "_intents_vistos": ["hola", "precio", "captura_datos_si_compra", "ofrecer_promos", "resumen_2x"],
-  "_templates_enviados": ["/bienvenida", "/precio_estandar"],
+```typescript
+interface SessionState {
+  // === DATOS DEL CLIENTE ===
+  nombre?: string;
+  apellido?: string;
+  telefono?: string;
+  direccion?: string;
+  barrio?: string;
+  ciudad?: string;
+  departamento?: string;
+  correo?: string;
 
-  "nombre": "Juan",
-  "apellido": "Pérez",
-  "telefono": "573001234567",
-  "direccion": "Cra 123 #45-67",
-  "barrio": "Laureles",
-  "ciudad": "Medellín",
-  "departamento": "Antioquia",
-  "correo": "juan@example.com",
+  // === DATOS DE COMPRA ===
+  pack?: '1x' | '2x' | '3x';
+  precio?: number;
 
-  "pack": "2x",
-  "order_created": false
+  // === TRACKING DE INTENTS ===
+  _last_intent?: string;
+  _intents_vistos?: Array<{
+    intent: string;
+    orden: number;
+  }>;
+
+  // === FLAGS DE ORDEN ===
+  order_created?: boolean;
+  order_created_at?: string;
+  order_id?: string;
+  order_url?: string;
+  order_promo?: string;
+  order_amount?: number;
+
+  // === PROACTIVE TIMER ===
+  _proactive_timer_active?: boolean;
+  _proactive_started_at?: string;
+  _first_data_at?: string;
+  _min_data_at?: string;
+  _ofrecer_promos_at?: string;
+  _action_no_data_sent?: boolean;
+  _action_missing_data_sent?: boolean;
+  _action_ofrecer_promos_done?: boolean;
 }
 ```
 
-#### Tabla: `messages_v3`
+### 4.3 Tabla messages_v3
 
 ```sql
 CREATE TABLE messages_v3 (
   id SERIAL PRIMARY KEY,
-  session_id VARCHAR REFERENCES sessions_v3(session_id),
-
-  -- Mensaje
-  role VARCHAR NOT NULL,                       -- 'user' | 'assistant'
+  session_id VARCHAR(100) REFERENCES sessions_v3(session_id),
+  role VARCHAR(20) NOT NULL,        -- 'user' | 'assistant'
   content TEXT NOT NULL,
-  direction VARCHAR NOT NULL,                  -- 'inbound' | 'outbound'
-
-  -- Metadata
-  callbell_message_id VARCHAR UNIQUE,          -- Para evitar duplicados
-  business_id VARCHAR DEFAULT 'somnio',
-  intent VARCHAR,                              -- Intent detectado
-
-  -- Raw data
-  payload_raw JSONB DEFAULT '{}',
-
+  direction VARCHAR(20) NOT NULL,   -- 'inbound' | 'outbound'
+  callbell_message_id VARCHAR(100) UNIQUE,
+  intent VARCHAR(100),
+  payload_raw JSONB,
   created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Índices
 CREATE INDEX idx_messages_session ON messages_v3(session_id);
 CREATE INDEX idx_messages_callbell_id ON messages_v3(callbell_message_id);
-CREATE INDEX idx_messages_created ON messages_v3(created_at DESC);
-CREATE UNIQUE INDEX idx_messages_callbell_unique ON messages_v3(callbell_message_id);
-```
-
-### 4.2 Queries Importantes
-
-#### Obtener Snapshot de Conversación
-
-```sql
--- Usado por: Carolina v3, Snapshot endpoint
-SELECT
-  s.*,
-  COALESCE(
-    json_agg(
-      json_build_object(
-        'id', m.id,
-        'role', m.role,
-        'content', m.content,
-        'direction', m.direction,
-        'created_at', m.created_at
-      )
-      ORDER BY m.created_at ASC
-    ) FILTER (WHERE m.id IS NOT NULL),
-    '[]'
-  ) as messages
-FROM sessions_v3 s
-LEFT JOIN messages_v3 m ON s.session_id = m.session_id
-WHERE s.phone = $1
-GROUP BY s.session_id;
-```
-
-#### Calcular Pending Messages
-
-```sql
--- Mensajes inbound después del último outbound
-WITH last_outbound AS (
-  SELECT MAX(created_at) as last_time
-  FROM messages_v3
-  WHERE session_id = $1
-    AND direction = 'outbound'
-)
-SELECT COUNT(*)
-FROM messages_v3 m, last_outbound lo
-WHERE m.session_id = $1
-  AND m.direction = 'inbound'
-  AND (lo.last_time IS NULL OR m.created_at > lo.last_time);
-```
-
-#### Buscar Sesiones Inactivas (Proactive Timers)
-
-```sql
--- Sesiones activas sin actividad reciente
-SELECT *
-FROM sessions_v3
-WHERE status = 'active'
-  AND last_activity < NOW() - INTERVAL '6 minutes'
-  AND (state->>'_recordatorio_enviado')::boolean IS NOT TRUE;
+CREATE INDEX idx_messages_created ON messages_v3(created_at);
 ```
 
 ---
 
-## 5. Integraciones Externas
+## 5. SISTEMA DE INTENTS
 
-### 5.1 Callbell API
+### 5.1 Catálogo Completo de Intents
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                    CALLBELL API                         │
-├─────────────────────────────────────────────────────────┤
-│  Webhook (Inbound):                                     │
-│    POST /webhook/historial-v3-callbell-webhook         │
-│    Headers: Content-Type: application/json             │
-│    Body: {                                              │
-│      uuid: "msg-123",                                   │
-│      from: "573001234567",                              │
-│      text: "Hola",                                      │
-│      direction: "inbound",                              │
-│      createdAt: 1234567890000,                          │
-│      contact: {                                         │
-│        uuid: "contact-456",                             │
-│        tags: ["WPP", "bot_off"]                         │
-│      }                                                  │
-│    }                                                    │
-│                                                         │
-│  Send Message (Outbound):                               │
-│    POST https://api.callbell.eu/v1/messages/send       │
-│    Headers:                                             │
-│      Authorization: Bearer {token}                      │
-│    Body: {                                              │
-│      to: "573001234567",                                │
-│      from: "whatsapp",                                  │
-│      type: "text",                                      │
-│      content: {                                         │
-│        text: "Mensaje a enviar"                         │
-│      }                                                  │
-│    }                                                    │
-│                                                         │
-│  Tags Management:                                       │
-│    POST /v1/contacts/{uuid}/tags                        │
-│    Body: { tag: "WPP" }                                 │
-└─────────────────────────────────────────────────────────┘
-```
+#### Informativos (Sin restricciones)
 
-### 5.2 Claude API (Anthropic)
+| Intent | Descripción | Templates asociados |
+|--------|-------------|---------------------|
+| `hola` | Saludo inicial | Bienvenida, presentación Carolina |
+| `precio` | Consulta de precios | Información de precios por pack |
+| `envio` | Consulta de envío | Tiempos, costos, cobertura |
+| `modopago` | Métodos de pago | Contraentrega, transferencia |
+| `ingredientes` | Composición producto | Lista de ingredientes naturales |
+| `funcionamiento` | Cómo funciona | Instrucciones de uso |
+| `testimonios` | Casos de éxito | Testimonios de clientes |
+| `garantia` | Política de garantía | Devoluciones y reembolsos |
+| `otro` | No clasificable | Respuesta genérica |
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                     CLAUDE API                          │
-├─────────────────────────────────────────────────────────┤
-│  Modelo: claude-sonnet-4-5-20250929                     │
-│  Uso: State Analyzer + Data Extractor                   │
-│                                                         │
-│  Request:                                               │
-│    POST https://api.anthropic.com/v1/messages          │
-│    Headers:                                             │
-│      x-api-key: {api_key}                               │
-│      anthropic-version: 2023-06-01                      │
-│    Body: {                                              │
-│      model: "claude-sonnet-4-5-20250929",               │
-│      max_tokens: 1024,                                  │
-│      messages: [                                        │
-│        {                                                │
-│          role: "user",                                  │
-│          content: "Prompt + Historial"                  │
-│        }                                                │
-│      ]                                                  │
-│    }                                                    │
-│                                                         │
-│  Response:                                              │
-│    {                                                    │
-│      content: [{                                        │
-│        text: "Respuesta de Claude"                      │
-│      }],                                                │
-│      usage: {                                           │
-│        input_tokens: 500,                               │
-│        output_tokens: 100                               │
-│      }                                                  │
-│    }                                                    │
-└─────────────────────────────────────────────────────────┘
-```
+#### Transaccionales (Con validaciones)
 
-### 5.3 Bigin CRM (Robot API)
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   BIGIN CRM (Robot)                     │
-├─────────────────────────────────────────────────────────┤
-│  Robot API (Playwright + TypeScript):                   │
-│    POST http://robot-api:3000/api/bigin/create-order   │
-│    Body: {                                              │
-│      ordenName: "Orden #123",                           │
-│      telefono: "573001234567",                          │
-│      direccion: "Cra 123 #45-67",                       │
-│      municipio: "Medellín",                             │
-│      departamento: "Antioquia",                         │
-│      email: "juan@example.com",                         │
-│      description: "2x Elixir + Envío",                  │
-│      amount: 200000,                                    │
-│      closingDate: "20/01/2026",                         │
-│      stage: "NUEVO INGRESO",                            │
-│      callBell: "https://dash.callbell.eu/chat/..."     │
-│    }                                                    │
-│                                                         │
-│  Response: {                                            │
-│    success: true,                                       │
-│    orderId: "6331846000012345678",                      │
-│    orderUrl: "https://bigin.zoho.com/..."              │
-│  }                                                      │
-│                                                         │
-│  Funcionalidades del Robot:                             │
-│    • Timeout de sesión (30 min)                         │
-│    • Verificación de ventanas cerradas                  │
-│    • Relogin automático                                 │
-│    • Retry con backoff exponencial                      │
-│    • Notificaciones en caso de fallo                    │
-└─────────────────────────────────────────────────────────┘
-```
-
----
-
-## 6. Diagramas de Arquitectura
-
-### 6.1 Diagrama de Componentes
-
-```
-┌────────────────────────────────────────────────────────────────┐
-│                      SISTEMA v3DSL                             │
-├────────────────────────────────────────────────────────────────┤
-│                                                                │
-│  ┌──────────────┐         ┌──────────────┐                    │
-│  │   Callbell   │────────→│ Historial v3 │                    │
-│  │   (WhatsApp) │         │ (Orquestador)│                    │
-│  └──────────────┘         └──────┬───────┘                    │
-│                                   │                            │
-│                    ┌──────────────┼──────────────┐             │
-│                    ▼              ▼              ▼             │
-│           ┌───────────────┐  ┌─────────┐  ┌──────────┐        │
-│           │ State Analyzer│  │   Data  │  │  Order   │        │
-│           │  (Claude AI)  │  │Extractor│  │ Manager  │        │
-│           └───────────────┘  └─────────┘  └────┬─────┘        │
-│                    │              │             │              │
-│                    └──────────────┼─────────────┘              │
-│                                   │                            │
-│                                   ▼                            │
-│                          ┌─────────────────┐                   │
-│                          │  PostgreSQL DB  │                   │
-│                          │  • sessions_v3  │                   │
-│                          │  • messages_v3  │                   │
-│                          └─────────────────┘                   │
-│                                   │                            │
-│                                   ▼                            │
-│                          ┌─────────────────┐                   │
-│                          │   Carolina v3   │                   │
-│                          │  (Respuestas)   │                   │
-│                          └────────┬────────┘                   │
-│                                   │                            │
-│                                   ▼                            │
-│                          ┌─────────────────┐                   │
-│                          │  Callbell API   │                   │
-│                          │  (Send Message) │                   │
-│                          └─────────────────┘                   │
-│                                                                │
-└────────────────────────────────────────────────────────────────┘
-
-Servicios Externos:
-┌────────────┐  ┌──────────┐  ┌────────────┐
-│ Claude API │  │ Callbell │  │  Bigin CRM │
-│ (Anthropic)│  │   API    │  │  (Robot)   │
-└────────────┘  └──────────┘  └────────────┘
-```
-
-### 6.2 Diagrama de Flujo de Intents
-
-Ver: [FLUJO-DE-INTENTS.md](./FLUJO-DE-INTENTS.md)
-
-### 6.3 Diagrama de Base de Datos
-
-Ver: [BASE-DE-DATOS.md](./BASE-DE-DATOS.md)
-
----
-
-## 7. Gestión de Estado
-
-### 7.1 Máquina de Estados (Mode)
-
-```
-┌────────────────────────────────────────────────────────┐
-│                  MÁQUINA DE ESTADOS                    │
-└────────────────────────────────────────────────────────┘
-
-Estado Inicial: "conversacion"
-
-conversacion
-    │
-    ├─ (intent: captura_datos_si_compra)
-    │
-    ▼
-collecting_data
-    │
-    ├─ (8 campos completos)
-    │
-    ▼
-conversacion
-```
-
-### 7.2 Lifecycle de Sesión
-
-```
-1. CREATED
-   ├─ Nuevo mensaje de cliente desconocido
-   ├─ INSERT en sessions_v3
-   └─ state = {}, mode = 'conversacion'
-
-2. ACTIVE
-   ├─ Intercambio de mensajes
-   ├─ State se va actualizando
-   └─ version incrementa con cada cambio
-
-3. COLLECTING_DATA
-   ├─ Intent especial detectado
-   ├─ Data Extractor se activa
-   └─ Captura de 8 campos
-
-4. READY_FOR_ORDER
-   ├─ Pack detectado
-   ├─ 6 campos mínimos completos
-   └─ Order Manager se activa
-
-5. ORDER_CREATED
-   ├─ order_created = true en state
-   ├─ Tag WPP agregado
-   └─ Bot se desactiva
-
-6. INACTIVE
-   ├─ Sin actividad > 24 horas
-   └─ status = 'inactive'
-```
-
----
-
-## 8. Sistema de Intents
-
-### 8.1 Categorías de Intents
-
-#### Informativos (sin restricciones)
-
-```
-hola
-precio
-info_promociones
-contenido_envase
-como_se_toma
-modopago
-envio
-invima
-ubicacion
-contraindicaciones
-fallback
-```
+| Intent | Prerequisitos | Acción |
+|--------|---------------|--------|
+| `captura_datos_si_compra` | Ninguno | Activa mode collecting_data |
+| `ofrecer_promos` | 8 campos completos | Muestra opciones de pack |
+| `resumen_1x` | ofrecer_promos visto | Resumen pack 1 ($77,900) |
+| `resumen_2x` | ofrecer_promos visto | Resumen pack 2 ($109,900) |
+| `resumen_3x` | ofrecer_promos visto | Resumen pack 3 ($139,900) |
+| `compra_confirmada` | resumen_Xx visto | Confirma y crea orden |
 
 #### Combinados
 
-```
-hola+precio
-hola+como_se_toma
-hola+envio
-hola+modopago
-hola+captura_datos_si_compra
-```
+| Intent | Componentes | Comportamiento |
+|--------|-------------|----------------|
+| `hola+precio` | hola + precio | Saludo con info de precios |
+| `hola+captura` | hola + interés compra | Saludo e inicia captura |
+| `precio+captura` | precio + interés compra | Precios e inicia captura |
 
-#### Transaccionales (con validaciones)
+### 5.2 Máquina de Estados de Intents
 
 ```
-captura_datos_si_compra   → Inicia capturing
-ofrecer_promos            → Requiere 8 campos
-resumen_1x/2x/3x          → Requiere ofrecer_promos visto
-compra_confirmada         → Requiere resumen_Xx visto
-no_confirmado             → Requiere resumen_Xx visto
-```
-
-### 8.2 Flujo de Validación de Intents
-
-```python
-def validar_intent(intent_detectado, intents_vistos, state):
-    """
-    Valida si el intent puede ejecutarse según el contexto
-    """
-
-    # Reglas de validación
-    validaciones = {
-        'ofrecer_promos': {
-            'requiere': lambda: len(campos_completos(state)) == 8
-        },
-        'resumen_1x': {
-            'requiere': lambda: 'ofrecer_promos' in intents_vistos
-        },
-        'resumen_2x': {
-            'requiere': lambda: 'ofrecer_promos' in intents_vistos
-        },
-        'resumen_3x': {
-            'requiere': lambda: 'ofrecer_promos' in intents_vistos
-        },
-        'compra_confirmada': {
-            'requiere': lambda: any(x in intents_vistos for x in ['resumen_1x', 'resumen_2x', 'resumen_3x'])
-        },
-        'no_confirmado': {
-            'requiere': lambda: any(x in intents_vistos for x in ['resumen_1x', 'resumen_2x', 'resumen_3x'])
-        }
-    }
-
-    if intent_detectado in validaciones:
-        return validaciones[intent_detectado]['requiere']()
-
-    return True  # Informativos siempre válidos
-```
-
-### 8.3 Auto-Detección Transaccional
-
-```javascript
-// State Analyzer detecta automáticamente:
-
-// 1. Si 8 campos completos + sin pack → ofrecer_promos
-if (campos_completos_count === 8 && !state.pack) {
-  intent = 'ofrecer_promos';
-}
-
-// 2. Si pack detectado + resumen no visto → resumen_{pack}
-if (state.pack && !intents_vistos.includes(`resumen_${state.pack}`)) {
-  intent = `resumen_${state.pack}`;
-}
+                                    ┌─────────────────────────────────────┐
+                                    │            INFORMATIVOS             │
+                                    │  hola, precio, envio, modopago...   │
+                                    └──────────────────┬──────────────────┘
+                                                       │
+                                                       │ "quiero comprar"
+                                                       ▼
+                              ┌─────────────────────────────────────────────────┐
+                              │           captura_datos_si_compra               │
+                              │         mode: collecting_data                   │
+                              └────────────────────────┬────────────────────────┘
+                                                       │
+                                                       │ 8 campos completos
+                                                       ▼
+                              ┌─────────────────────────────────────────────────┐
+                              │               ofrecer_promos                    │
+                              │            (auto-detectado)                     │
+                              └────────────────────────┬────────────────────────┘
+                                                       │
+                               ┌───────────────────────┼───────────────────────┐
+                               ▼                       ▼                       ▼
+                        ┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+                        │ resumen_1x  │         │ resumen_2x  │         │ resumen_3x  │
+                        │  $77,900    │         │  $109,900   │         │  $139,900   │
+                        └──────┬──────┘         └──────┬──────┘         └──────┬──────┘
+                               │                       │                       │
+                               └───────────────────────┼───────────────────────┘
+                                                       │
+                                                       │ "sí, confirmo"
+                                                       ▼
+                              ┌─────────────────────────────────────────────────┐
+                              │              compra_confirmada                  │
+                              │    → Order Manager → Bigin → Tag WPP           │
+                              └─────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 9. Seguridad y Confiabilidad
+## 6. INTEGRACIONES EXTERNAS
 
-### 9.1 Prevención de Race Conditions
+### 6.1 Callbell API
 
-```sql
--- Version counter previene conflictos
+**Base URL:** `https://api.callbell.eu/v1`
+
+| Operación | Método | Endpoint | Propósito |
+|-----------|--------|----------|-----------|
+| Enviar mensaje texto | POST | `/messages` | Respuestas del bot |
+| Enviar mensaje imagen | POST | `/messages` | Templates con imagen |
+| Actualizar contacto | PATCH | `/contacts/{uuid}` | Agregar tags |
+| Webhook entrante | POST | n8n webhook | Recibir mensajes |
+
+**Headers:**
+```
+Authorization: Bearer {CALLBELL_API_KEY}
+Content-Type: application/json
+```
+
+### 6.2 Anthropic Claude API
+
+**Base URL:** `https://api.anthropic.com/v1`
+
+| Operación | Método | Endpoint | Propósito |
+|-----------|--------|----------|-----------|
+| Chat completion | POST | `/messages` | Intent detection, data extraction |
+
+**Configuración:**
+```json
+{
+  "model": "claude-sonnet-4-20250514",
+  "max_tokens": 1024,
+  "headers": {
+    "anthropic-version": "2023-06-01"
+  }
+}
+```
+
+### 6.3 Robot API (Bigin)
+
+**Base URL:** `http://robot-api.local:3000`
+
+| Operación | Método | Endpoint | Propósito |
+|-----------|--------|----------|-----------|
+| Crear orden | POST | `/bigin/create-order` | Nueva orden en CRM |
+
+**Timeout:** 180 segundos (Playwright automation es lenta)
+
+---
+
+## 7. PATRONES Y MECANISMOS CLAVE
+
+### 7.1 Optimistic Locking (Versionamiento)
+
+```javascript
+// Cada modificación incrementa version
 UPDATE sessions_v3
 SET
-  state = $new_state,
-  version = version + 1
-WHERE session_id = $id
-  AND version = $expected_version;  -- Optimistic locking
+  state = $1,
+  version = version + 1,
+  updated_at = NOW()
+WHERE session_id = $2;
 
--- En Carolina v3:
--- 1. Get snapshot (version = 5)
--- 2. Wait 2 seconds
--- 3. Get snapshot again (version = 6?)
--- 4. Si version cambió → ABORT (cliente interrumpió)
+// Carolina verifica version antes de cada envío
+const shouldContinue = currentVersion === initialVersion;
 ```
 
-### 9.2 Idempotencia
+### 7.2 Idempotencia de Mensajes
 
-```javascript
-// Mensajes de Callbell se guardan con ID único
-INSERT INTO messages_v3 (callbell_message_id, ...)
+```sql
+-- Constraint UNIQUE previene duplicados
+INSERT INTO messages_v3 (session_id, content, callbell_message_id)
+VALUES ($1, $2, $3)
 ON CONFLICT (callbell_message_id) DO NOTHING;
-
-// Evita duplicados si Callbell reenvía webhook
 ```
 
-### 9.3 Manejo de Errores
+### 7.3 Flags de Acciones Únicas
 
 ```javascript
-// Robot de Bigin:
-// • Retry con backoff exponencial (1s, 2s, 4s)
-// • Notificación al equipo después de 3 fallos
-// • Relogin automático si sesión expirada
-// • Recuperación de ventanas cerradas
+// Prevenir acciones duplicadas
+const FLAGS = {
+  '_action_no_data_sent': Boolean,      // Recordatorio enviado
+  '_action_missing_data_sent': Boolean,  // Solicitud de datos enviada
+  '_action_ofrecer_promos_done': Boolean, // Promos ofrecidas
+  'order_created': Boolean               // Orden creada
+};
 
-// State Analyzer / Data Extractor:
-// • Timeout de 30 segundos en Claude API
-// • Fallback a intent "fallback" si falla
-// • Log de errores para debugging
+// Verificar antes de ejecutar
+if (!state._action_no_data_sent) {
+  await sendReminder();
+  await updateState({ _action_no_data_sent: true });
+}
+```
+
+### 7.4 Tag-Based Flow Control
+
+```javascript
+const BLOCKED_TAGS = ['WPP', 'P/W', 'RECO', 'bot_off'];
+
+function shouldProcessMessage(tags) {
+  return !tags.some(tag => BLOCKED_TAGS.includes(tag));
+}
 ```
 
 ---
 
-## 10. Monitoreo y Observabilidad
+## 8. CONFIGURACIÓN Y PRECIOS
 
-### 10.1 Métricas Clave
+### 8.1 Configuración de Tiempos
 
+```javascript
+const TIMING_CONFIG = {
+  // Validación de mensajes
+  MAX_MESSAGE_AGE_SECONDS: 120,
+
+  // Timeouts de agentes
+  STATE_ANALYZER_TIMEOUT_MS: 30000,
+  DATA_EXTRACTOR_TIMEOUT_MS: 30000,
+  ORDER_MANAGER_TIMEOUT_MS: 180000,
+
+  // Proactive Timer
+  TIMER_LOOP_INTERVAL_MINUTES: 2,
+  TIMER_MAX_ITERATIONS: 20,
+  NO_DATA_REMINDER_MINUTES: 10,
+  PARTIAL_DATA_REMINDER_MINUTES: 6,
+  PROMO_WAIT_MINUTES: 10,
+
+  // Carolina delays
+  FIRST_MESSAGE_DELAY: 0,
+  SUBSEQUENT_MESSAGE_DELAY_MIN: 2,
+  SUBSEQUENT_MESSAGE_DELAY_MAX: 6
+};
 ```
-Conversión:
-├─ hola → captura_datos_si_compra: XX%
-├─ captura_datos → 8 campos: XX%
-├─ ofrecer_promos → pack seleccionado: XX%
-└─ resumen_Xx → compra_confirmada: XX%
 
-Performance:
-├─ Tiempo respuesta promedio: < 3s
-├─ Claude API latency: ~1-2s
-└─ Callbell API latency: ~500ms
+### 8.2 Configuración de Precios
 
-Volumen:
-├─ Mensajes/día
-├─ Conversaciones activas
-└─ Órdenes creadas/día
-
-Errores:
-├─ Rate de errores de Claude API
-├─ Rate de errores de Callbell API
-└─ Rate de errores de Robot Bigin
+```javascript
+const PRICING_CONFIG = {
+  '1x': {
+    code: '1x',
+    quantity: 1,
+    price: 77900,
+    currency: 'COP'
+  },
+  '2x': {
+    code: '2x',
+    quantity: 2,
+    price: 109900,
+    currency: 'COP'
+  },
+  '3x': {
+    code: '3x',
+    quantity: 3,
+    price: 139900,
+    currency: 'COP'
+  },
+  'WPP': {
+    code: 'WPP',
+    quantity: 0,
+    price: 0,
+    currency: 'COP',
+    description: 'Sin pack seleccionado'
+  }
+};
 ```
 
-### 10.2 Logs Importantes
+### 8.3 Campos Requeridos
 
-```
-📥 WEBHOOK RECEIVED - Mensaje recibido
-🏷️ CHECKING TAGS - Verificación de tags
-🤖 INTENT FROM STATE - Intent detectado
-📸 Snapshot built - Snapshot construido
-✅ MESSAGE SENT SUCCESSFULLY - Mensaje enviado
-⚠️ INTERRUPTED - Cliente interrumpió
-📦 ORDER CREATED - Orden creada
-❌ ERROR - Error ocurrido
+```javascript
+const FIELD_CONFIG = {
+  // Campos mínimos para crear orden
+  MINIMUM_FIELDS: [
+    'nombre',
+    'apellido',
+    'telefono',
+    'direccion',
+    'ciudad',
+    'departamento'
+  ],
+
+  // Todos los campos de captura
+  ALL_FIELDS: [
+    'nombre',
+    'apellido',
+    'telefono',
+    'direccion',
+    'barrio',
+    'ciudad',
+    'departamento',
+    'correo'
+  ],
+
+  // Campos tolerados vacíos
+  OPTIONAL_FIELDS: ['barrio', 'correo']
+};
 ```
 
 ---
 
-## 11. Escalabilidad
+## 9. CONSIDERACIONES DE ESCALABILIDAD
 
-### 11.1 Capacidad Actual
+### 9.1 Puntos de Bottleneck
 
+| Componente | Bottleneck | Mitigación |
+|------------|------------|------------|
+| Claude API | Rate limits, latencia | Caché de intents frecuentes |
+| PostgreSQL | Conexiones concurrentes | Connection pooling |
+| Callbell API | Rate limits | Queue con backoff |
+| Robot API | Playwright sessions | Pool de browsers |
+
+### 9.2 Recomendaciones para Alta Escala
+
+1. **Redis Cache** para snapshots y sesiones activas
+2. **Message Queue** (RabbitMQ/SQS) para procesamiento asíncrono
+3. **Read Replicas** PostgreSQL para queries de solo lectura
+4. **Horizontal Scaling** de workers n8n
+5. **CDN** para templates estáticos
+
+---
+
+## 10. REFERENCIA PARA MORFX
+
+### 10.1 Contratos de API Estables
+
+```typescript
+// === HISTORIAL V3 ===
+interface HistorialWebhook {
+  POST: '/webhook/historial-v3-callbell-webhook'
+  body: CallbellWebhookPayload | TestPayload
+  response: { success: boolean, message: string }
+}
+
+// === STATE ANALYZER ===
+interface StateAnalyzerAPI {
+  POST: '/webhook/state-analyzer'
+  body: {
+    phone: string
+    historial: Message[]
+    pending_messages: Message[]
+    captured_data: SessionState
+  }
+  response: {
+    success: boolean
+    intent: string
+    campos_completos: boolean
+    campos_faltantes: string[]
+    pack_detectado: string | null
+    mode: 'conversacion' | 'collecting_data'
+    intents_vistos: IntentRecord[]
+  }
+}
+
+// === DATA EXTRACTOR ===
+interface DataExtractorAPI {
+  POST: '/webhook/data-extractor'
+  body: {
+    phone: string
+    last_message: string
+    captured_data: Partial<SessionState>
+  }
+  response: {
+    success: boolean
+    extracted: Partial<SessionState>
+    merged: Partial<SessionState>
+    fields_updated: string[]
+    negations_detected: string[]
+  }
+}
+
+// === ORDER MANAGER ===
+interface OrderManagerAPI {
+  POST: '/webhook/order-manager'
+  body: {
+    phone: string
+    captured_data: SessionState
+    promo?: string
+    promo_override?: string
+    source: string
+    callbell_conversation_href?: string
+    contact_id?: string
+  }
+  response: {
+    success: boolean
+    order?: {
+      id: string
+      name: string
+      url: string
+      amount: number
+      promo: string
+    }
+    error?: string
+    missing?: string[]
+  }
+}
+
+// === CAROLINA V3 ===
+interface CarolinaAPI {
+  POST: '/webhook/carolina-v3-process'
+  body: {
+    phone: string
+    force_intent?: string
+  }
+  response: { success: boolean, message: string }
+}
+
+// === SNAPSHOT ===
+interface SnapshotAPI {
+  GET: '/webhook/historial-v3-snapshot?phone={phone}'
+  response: Snapshot
+}
+
+// === PROACTIVE TIMER ===
+interface ProactiveTimerAPI {
+  POST: '/webhook/proactive-timer-instance'
+  body: { phone: string }
+  response: { success: boolean, message: string }
+}
 ```
-┌────────────────────────────────────────────────────┐
-│  Conversaciones simultáneas: Ilimitadas           │
-│  Limitado solo por:                                │
-│    • Rate limits de APIs externas                  │
-│    • Capacidad de PostgreSQL                       │
-│    • Recursos de n8n                               │
-└────────────────────────────────────────────────────┘
+
+### 10.2 Extensiones para Multi-Tenant
+
+```typescript
+interface TenantConfig {
+  tenantId: string;
+  name: string;
+
+  // Canales
+  channels: ChannelConfig[];
+
+  // Producto
+  product: ProductConfig;
+
+  // Flujo conversacional
+  intents: IntentConfig;
+  templates: TemplateConfig;
+
+  // Integraciones
+  crm: CRMConfig;
+  messaging: MessagingConfig;
+  ai: AIConfig;
+
+  // Tiempos
+  timing: TimingConfig;
+}
+
+interface ChannelConfig {
+  type: 'whatsapp' | 'telegram' | 'webchat' | 'instagram';
+  provider: string;
+  credentials: Record<string, string>;
+  webhookUrl: string;
+}
 ```
 
-### 11.2 Optimizaciones
+### 10.3 Abstracción de Agentes
 
+```typescript
+interface Agent {
+  name: string;
+  endpoint: string;
+  process(input: AgentInput): Promise<AgentOutput>;
+  healthCheck(): Promise<boolean>;
+}
+
+interface AgentOrchestrator {
+  register(agent: Agent): void;
+  route(message: IncomingMessage): Promise<Agent[]>;
+  execute(agents: Agent[], context: ConversationContext): Promise<void>;
+}
 ```
-1. PostgreSQL:
-   ├─ Índices en phone, created_at, callbell_message_id
-   ├─ JSONB para state (flexible + rápido)
-   └─ Particionado por fecha (futuro)
 
-2. n8n:
-   ├─ Workflows independientes (paralelizables)
-   ├─ Caché de conexiones a BD
-   └─ Timeout configurables
+### 10.4 Event Bus para Observabilidad
 
-3. APIs Externas:
-   ├─ Retry con backoff exponencial
-   ├─ Circuit breaker (futuro)
-   └─ Rate limiting awareness
+```typescript
+interface SystemEvent {
+  eventId: string;
+  timestamp: Date;
+  tenantId: string;
+  sessionId: string;
+  eventType: string;
+  payload: Record<string, any>;
+}
+
+type EventTypes =
+  | 'message.received'
+  | 'message.sent'
+  | 'intent.detected'
+  | 'data.extracted'
+  | 'order.created'
+  | 'timer.started'
+  | 'timer.action'
+  | 'error.occurred';
+
+interface EventBus {
+  publish(event: SystemEvent): Promise<void>;
+  subscribe(eventType: EventTypes, handler: EventHandler): Unsubscribe;
+}
 ```
 
 ---
 
-## 12. Futuras Mejoras
+## 11. RESUMEN EJECUTIVO
 
-### 12.1 Corto Plazo
+### 11.1 Fortalezas del Sistema
 
-- [ ] Activar Proactive Timers (testing completo primero)
-- [ ] Directorio de municipios con tiempos de entrega
-- [ ] Completar intents faltantes
-- [ ] Dashboard de métricas en tiempo real
+1. **Arquitectura desacoplada:** Cada agente es independiente y escalable
+2. **Control de concurrencia:** Versionamiento previene race conditions
+3. **Detección de interrupciones:** UX natural cuando cliente interrumpe
+4. **Acciones proactivas:** Timer automatiza seguimiento
+5. **Idempotencia:** Flags previenen acciones duplicadas
 
-### 12.2 Mediano Plazo
+### 11.2 Áreas de Mejora para MorfX
 
-- [ ] Multi-tenant (múltiples negocios)
-- [ ] A/B testing de templates
-- [ ] Analytics avanzado (Mixpanel/Amplitude)
-- [ ] Notificaciones al equipo (Slack)
+1. **Multi-tenant nativo:** Actualmente single-tenant
+2. **Multi-canal:** Expandir más allá de WhatsApp
+3. **Analytics en tiempo real:** Dashboard de métricas
+4. **A/B Testing:** Experimentación de templates
+5. **CRM genérico:** Abstracción más allá de Bigin
 
-### 12.3 Largo Plazo
+### 11.3 Métricas Clave a Monitorear
 
-- [ ] Voice notes support
-- [ ] Multi-canal (Instagram, Telegram)
-- [ ] IA generativa para respuestas (sin templates)
-- [ ] CRM propio (reemplazar Bigin)
-
----
-
-## 📚 Referencias
-
-- **Documentación Técnica:** `/docs/`
-- **Workflows:** `/workflows/`
-- **Robot de Bigin:** `/bigin-robot/`
-- **Lista de Tareas:** `/TODO.md`
+| Métrica | Descripción | Target |
+|---------|-------------|--------|
+| Response Time | Tiempo hasta primera respuesta | < 3 segundos |
+| Conversion Rate | Saludos → Órdenes | > 70% |
+| Data Capture Rate | Campos capturados por sesión | > 90% |
+| Interruption Rate | Loops interrumpidos | < 20% |
+| Timer Effectiveness | Órdenes por timer | > 30% |
 
 ---
 
-**Última actualización:** 17 de Enero 2026
-**Versión del Sistema:** v3.0.0
-**Autor:** Claude Sonnet 4.5
-
----
-
-**🎉 Fin del Documento de Arquitectura General**
+**Este documento sirve como referencia maestra para la implementación de la plataforma MorfX, preservando los patrones y arquitectura probados del sistema v3DSL.**

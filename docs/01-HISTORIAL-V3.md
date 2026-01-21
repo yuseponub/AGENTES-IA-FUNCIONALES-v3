@@ -1,398 +1,548 @@
-# Historial v3 - Documentación Técnica
+# 01 - HISTORIAL V3
 
-## 📋 Resumen
-**Workflow:** Agente Historial v3
-**Función Principal:** Receptor y procesador central de mensajes de Callbell
-**Tipo:** Webhook receptor + Orquestador
-**Endpoints:** `/webhook/historial-v3-callbell-webhook`
+> **Rol:** Orquestador Central del Sistema
+> **Endpoint:** `POST /webhook/historial-v3-callbell-webhook`
+> **Archivo:** `workflows/01-historial-v3.json`
 
-## 🎯 Propósito
+---
 
-El Historial v3 es el **corazón del sistema**. Recibe todos los mensajes entrantes desde Callbell (WhatsApp), los procesa, mantiene el estado de las conversaciones en PostgreSQL, y orquesta la llamada a los demás agentes del sistema (State Analyzer, Data Extractor, Order Manager, Carolina v3).
+## 1. DESCRIPCIÓN GENERAL
 
-## 🔄 Flujo de Procesamiento
+Historial V3 es el **corazón del sistema v3DSL**. Actúa como punto de entrada único para todos los mensajes de WhatsApp recibidos vía Callbell, orquestando el flujo completo de procesamiento: validación, persistencia, análisis de intención, extracción de datos y disparo de respuestas.
 
-### 1. Recepción del Mensaje (Webhook)
+### Responsabilidades Principales
+- Recibir y validar webhooks de Callbell
+- Gestionar sesiones de conversación en PostgreSQL
+- Persistir mensajes con deduplicación
+- Coordinar llamadas a agentes especializados (State Analyzer, Data Extractor)
+- Disparar creación de órdenes cuando se cumplen condiciones
+- Activar el agente de respuestas (Carolina V3)
+
+---
+
+## 2. ARQUITECTURA DE NODOS
+
+### 2.1 Diagrama de Flujo
+
 ```
-Callbell → Webhook Callbell → Respond Immediately
-```
-- **Nodo:** `Webhook Callbell`
-- **Trigger:** POST desde Callbell cuando hay un mensaje nuevo
-- **Respuesta:** Inmediata (200 OK) para no bloquear a Callbell
-
-### 2. Parse y Validación
-```
-Respond → Parse Payload → Check Blocked Tags
-```
-
-**Parse Payload:**
-- Extrae datos del webhook de Callbell
-- Soporta dos formatos:
-  - Formato test: `{uuid, from, to, text...}`
-  - Formato Callbell real: `{event: "message_created", payload: {...}}`
-- Normaliza teléfonos (agrega prefijo 57 si falta)
-- Extrae: `callbell_message_id`, `phone`, `contact_id`, `conversation_href`, `tags`, `direction`
-
-**Check Blocked Tags and Duplicates:**
-- Verifica tags bloqueados: `['WPP', 'P/W', 'RECO', 'bot_off']`
-- Verifica si el mensaje es antiguo (> 2 minutos)
-- Si está bloqueado → va a `Log Blocked Message` y termina
-- Si pasa → continúa el flujo
-
-### 3. Gestión de Sesiones
-```
-Find Session → Check Session Exists
-  ├─ TRUE → Merge Existing Session
-  └─ FALSE → Create New Session ID
-```
-
-**Find Session:**
-```sql
-SELECT session_id, state, contact_id, tags, mode
-FROM sessions_v3
-WHERE phone = '{{phone}}'
-LIMIT 1
-```
-
-**Merge Existing Session:**
-- Prioriza tags nuevos de Callbell
-- Mantiene session_id existente
-- Preserva state anterior
-
-**Create New Session ID:**
-- Genera: `session_${phone}_${timestamp}`
-- Inicia con `state: {}`, `mode: 'conversacion'`
-- Guarda `contact_id`, `conversation_href`, `tags`
-
-**Insert/Update Session:**
-```sql
-INSERT INTO sessions_v3 (
-  session_id, phone, contact_id,
-  callbell_conversation_href, state, tags,
-  mode, status, created_at, last_activity
-) VALUES (...)
-```
-
-### 4. Guardar Mensaje
-```
-Preserve Message Data → Insert Message
-```
-
-**Insert Message:**
-```sql
-INSERT INTO messages_v3 (
-  session_id, role, content, direction,
-  callbell_message_id, business_id,
-  payload_raw, created_at
-) VALUES (...)
-ON CONFLICT (callbell_message_id) DO NOTHING
-```
-
-**Campos clave:**
-- `role`: "user" (inbound) | "assistant" (outbound)
-- `direction`: "inbound" | "outbound"
-- `callbell_message_id`: ID único del mensaje en Callbell (evita duplicados)
-
-### 5. Filtro de Dirección
-```
-Check Direction (Inbound?)
-  ├─ INBOUND → Continúa procesamiento
-  └─ OUTBOUND → Log Outbound Skip (termina)
-```
-
-**Razón:** Solo procesamos mensajes entrantes del usuario. Los mensajes salientes (del bot) no necesitan análisis.
-
-### 6. Análisis de Intención (State Analyzer)
-```
-Get Messages for Snapshot → Format Snapshot → Call State Analyzer
-```
-
-**Get Messages for Snapshot:**
-```sql
-SELECT m.id, m.role, m.content, m.direction, m.created_at,
-       s.session_id, s.phone, s.state as captured_data
-FROM messages_v3 m
-JOIN sessions_v3 s ON m.session_id = s.session_id
-WHERE s.phone = '{{phone}}'
-ORDER BY m.created_at ASC
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                              HISTORIAL V3                                        │
+├─────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│  ┌──────────┐    ┌──────────┐    ┌─────────────┐    ┌──────────────────┐        │
+│  │ Webhook  │───▶│ Respond  │───▶│ Parse       │───▶│ Check Blocked    │        │
+│  │ Callbell │    │ 200 OK   │    │ Payload     │    │ Tags & Duplicates│        │
+│  └──────────┘    └──────────┘    └─────────────┘    └────────┬─────────┘        │
+│                                                               │                  │
+│                         ┌─────────────────────────────────────┴───────┐          │
+│                         ▼                                             ▼          │
+│                  ┌─────────────┐                              ┌──────────────┐   │
+│                  │ IF: Should  │──────[BLOCKED]──────────────▶│ Log Blocked  │   │
+│                  │ Block?      │                              │ Message      │   │
+│                  └──────┬──────┘                              └──────────────┘   │
+│                         │ [CONTINUE]                                             │
+│                         ▼                                                        │
+│                  ┌─────────────┐                                                 │
+│                  │ Find        │                                                 │
+│                  │ Session     │                                                 │
+│                  └──────┬──────┘                                                 │
+│                         │                                                        │
+│           ┌─────────────┴─────────────┐                                         │
+│           ▼                           ▼                                         │
+│    ┌─────────────┐             ┌─────────────┐                                  │
+│    │ Merge       │             │ Create New  │                                  │
+│    │ Existing    │             │ Session ID  │                                  │
+│    └──────┬──────┘             └──────┬──────┘                                  │
+│           └─────────────┬─────────────┘                                         │
+│                         ▼                                                        │
+│                  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐      │
+│                  │ Insert/     │───▶│ Preserve    │───▶│ Insert          │      │
+│                  │ Update Sess │    │ Message     │    │ Message         │      │
+│                  └─────────────┘    └─────────────┘    └────────┬────────┘      │
+│                                                                  │               │
+│                                                     ┌────────────┴───────┐       │
+│                                                     ▼                    ▼       │
+│                                              ┌─────────────┐     ┌────────────┐  │
+│                                              │ IF: Inbound?│     │ Log        │  │
+│                                              │             │────▶│ Outbound   │  │
+│                                              └──────┬──────┘     │ Skip       │  │
+│                                                     │            └────────────┘  │
+│                                                     ▼ [INBOUND]                  │
+│                                              ┌─────────────┐                     │
+│                                              │ Get Messages│                     │
+│                                              │ for Snapshot│                     │
+│                                              └──────┬──────┘                     │
+│                                                     ▼                            │
+│                                              ┌─────────────┐                     │
+│                                              │ Format      │                     │
+│                                              │ Snapshot    │                     │
+│                                              └──────┬──────┘                     │
+│                                                     ▼                            │
+│  ┌───────────────────────────────────────────────────────────────────────────┐  │
+│  │                    LLAMADAS A AGENTES EXTERNOS                            │  │
+│  │                                                                           │  │
+│  │  ┌─────────────────┐         ┌─────────────────┐         ┌────────────┐  │  │
+│  │  │ Call State      │────────▶│ Update Session  │────────▶│ IF: Mode   │  │  │
+│  │  │ Analyzer        │         │ with Results    │         │ collecting?│  │  │
+│  │  └─────────────────┘         └─────────────────┘         └─────┬──────┘  │  │
+│  │                                                                 │         │  │
+│  │                              ┌──────────────────────────────────┴───┐     │  │
+│  │                              ▼                                      ▼     │  │
+│  │                       ┌─────────────────┐                    [CONTINUE]   │  │
+│  │                       │ Call Data       │                          │      │  │
+│  │                       │ Extractor       │                          │      │  │
+│  │                       └────────┬────────┘                          │      │  │
+│  │                                │                                   │      │  │
+│  │                                └───────────────┬───────────────────┘      │  │
+│  │                                                ▼                          │  │
+│  │                                         ┌─────────────┐                   │  │
+│  │                                         │ Merge Data  │                   │  │
+│  │                                         └──────┬──────┘                   │  │
+│  │                                                ▼                          │  │
+│  │                                         ┌─────────────┐                   │  │
+│  │                                         │ Update State│                   │  │
+│  │                                         │ PostgreSQL  │                   │  │
+│  │                                         └──────┬──────┘                   │  │
+│  └───────────────────────────────────────────────┬───────────────────────────┘  │
+│                                                   ▼                              │
+│                                            ┌─────────────┐                       │
+│                                            │ Should      │                       │
+│                                            │ Create Order│                       │
+│                                            └──────┬──────┘                       │
+│                                    ┌──────────────┴──────────────┐               │
+│                                    ▼                             ▼               │
+│                             ┌─────────────┐               ┌─────────────┐        │
+│                             │ Call Order  │               │ Trigger     │        │
+│                             │ Manager     │──────────────▶│ Carolina V3 │        │
+│                             └─────────────┘               └─────────────┘        │
+│                                                                                  │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Format Snapshot for State Analyzer:**
-- Calcula mensajes pendientes: mensajes inbound después del último outbound
-- Extrae `_intents_vistos` del state
-- Construye el objeto:
+### 2.2 Inventario Completo de Nodos
+
+| # | Nodo | Tipo | Función |
+|---|------|------|---------|
+| 1 | **Webhook Callbell** | `webhook` | Recibe POST de Callbell con mensajes entrantes |
+| 2 | **Respond Immediately** | `respondToWebhook` | Retorna 200 OK inmediatamente para no bloquear Callbell |
+| 3 | **Parse Payload** | `code` | Extrae y normaliza: uuid, phone, direction, tags, contact_id, conversation_href |
+| 4 | **Check Blocked Tags and Duplicates** | `code` | Valida tags bloqueados y antigüedad del mensaje |
+| 5 | **IF: Should Block Message?** | `if` | Bifurca: continuar o bloquear |
+| 6 | **Find Session** | `postgres` | Busca sesión existente por teléfono |
+| 7 | **Check Session Exists** | `if` | Determina si crear nueva o usar existente |
+| 8 | **Merge Existing Session** | `code` | Combina datos existentes con nuevos tags |
+| 9 | **Create New Session ID** | `code` | Genera `session_${phone}_${timestamp}` |
+| 10 | **Insert/Update Session** | `postgres` | Persiste sesión en `sessions_v3` |
+| 11 | **Preserve Message Data** | `code` | Recupera objeto mensaje post-insert |
+| 12 | **Insert Message** | `postgres` | Persiste en `messages_v3` con deduplicación |
+| 13 | **Check Direction (Inbound?)** | `if` | Filtra: solo procesa inbound |
+| 14 | **Log Outbound Skip** | `code` | Registra mensajes outbound ignorados |
+| 15 | **Get Messages for Snapshot** | `postgres` | Obtiene historial + state para snapshot |
+| 16 | **Format Snapshot for State Analyzer** | `code` | Construye payload para análisis de intent |
+| 17 | **Call State Analyzer** | `httpRequest` | POST a `/webhook/state-analyzer` |
+| 18 | **Update Session with State Analyzer Results** | `postgres` | Merge de state + mode + last_activity |
+| 19 | **Check Mode (collecting_data?)** | `if` | Bifurca según modo de conversación |
+| 20 | **Call Data Extractor Simple** | `httpRequest` | POST a `/webhook/data-extractor` |
+| 21 | **Merge Data** | `code` | Combina resultados de State Analyzer + Data Extractor |
+| 22 | **Update State in PostgreSQL** | `postgres` | Actualización final con intent tracking |
+| 23 | **Should Create Order?** | `if` | Evalúa condiciones de creación de orden |
+| 24 | **Call Order Manager** | `httpRequest` | POST a `/webhook/order-manager` |
+| 25 | **Trigger Carolina V3** | `httpRequest` | POST a `/webhook/carolina-v3-process` |
+
+---
+
+## 3. ENDPOINTS
+
+### 3.1 Endpoint Principal
+
+```
+POST https://n8n.automatizacionesmorf.com/webhook/historial-v3-callbell-webhook
+```
+
+**Headers requeridos:**
 ```json
 {
-  "phone": "57...",
-  "messages": [...],
-  "pending": [...],
-  "state": {...},
-  "intents_vistos": [...]
+  "Content-Type": "application/json"
 }
 ```
 
-**Call State Analyzer:**
-- POST a `https://n8n.automatizacionesmorf.com/webhook/state-analyzer`
-- Recibe: intent detectado, new_mode, captured_data actualizado
-
-### 7. Extracción de Datos (Si aplica)
-```
-Update Session with State Analyzer Results → Check Mode (collecting_data?)
-  ├─ TRUE → Call Data Extractor
-  └─ FALSE → Salta Data Extractor
-```
-
-**Call Data Extractor Simple:**
-- Solo se llama si `mode === 'collecting_data'`
-- POST a `https://n8n.automatizacionesmorf.com/webhook/data-extractor`
-- Extrae: nombre, apellido, teléfono, dirección, ciudad, departamento, barrio, correo
-- Usa Claude API para extracción inteligente con LLM
-
-### 8. Merge de Datos
-```
-Merge Data → Check if All Fields Complete → Update State in PostgreSQL
-```
-
-**Merge Data:**
-- Combina datos de State Analyzer + Data Extractor
-- Verifica campos mínimos completos: `['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento']`
-- Establece flags: `campos_minimos_completos`, `order_created`
-
-**Check if All Fields Complete:**
-- Verifica 8 campos completos (incluyendo barrio, correo)
-- Lógica de cambio de modo:
-  - **Todos 8 campos** → `mode: 'conversacion'`
-  - **Campos mínimos sin pack** → `intent: 'ofrecer_promos'`, mantiene `mode: 'collecting_data'`
-- Actualiza `_last_intent` dentro de captured_data
-
-**Update State in PostgreSQL:**
-```sql
-UPDATE sessions_v3
-SET state = '{{captured_data}}'::jsonb,
-    mode = '{{final_mode}}',
-    last_activity = NOW()
-WHERE phone = '{{phone}}'
-```
-
-### 9. Creación de Orden (Condicional)
-```
-Should Create Order?
-  ├─ TRUE (pack + campos + !order_created) → Trigger Carolina v → Call Order Manager → Update Order Created Flag
-  └─ FALSE → Trigger Carolina v3 (normal)
-```
-
-**Should Create Order?**
-Condiciones:
-1. `pack_detectado` no vacío (1x, 2x, 3x)
-2. `campos_minimos_completos === true`
-3. `order_created === false`
-
-**Call Order Manager:**
-- POST a `http://localhost:5678/webhook/order-manager`
-- Body:
+**Payload Callbell (formato real):**
 ```json
 {
-  "phone": "57...",
-  "captured_data": {...},
-  "callbell_conversation_href": "https://...",
-  "source": "historial_v3"
+  "event": "message_created",
+  "payload": {
+    "uuid": "msg_uuid_123",
+    "conversationUuid": "conv_uuid_456",
+    "channel": "whatsapp",
+    "direction": "inbound",
+    "text": "Hola, quiero comprar",
+    "from": "573001234567",
+    "to": "573009876543",
+    "contact": {
+      "uuid": "contact_uuid_789",
+      "name": "Juan Pérez",
+      "phone": "573001234567",
+      "tags": ["lead"],
+      "customFields": {}
+    },
+    "conversation": {
+      "href": "https://dash.callbell.eu/conversations/conv_uuid_456"
+    },
+    "createdAt": "2026-01-21T10:30:00.000Z"
+  }
 }
 ```
 
-**Arreglar Callbell + HTTP: Add RB Tag:**
-- Actualiza contacto en Callbell con tags `["WPP", "RB"]`
-- Agrega el `bigin orden` URL en custom_fields
-- PATCH a `https://api.callbell.eu/v1/contacts/{{contact_id}}`
-
-### 10. Trigger de Respuesta (Carolina v3)
+**Payload Test (formato simplificado):**
+```json
+{
+  "uuid": "test_msg_001",
+  "from": "573001234567",
+  "to": "573009876543",
+  "text": "Quiero información del precio",
+  "direction": "inbound",
+  "tags": []
+}
 ```
-Trigger Carolina v3
+
+**Respuesta:**
+```json
+{
+  "success": true,
+  "message": "Message received"
+}
 ```
-- POST a `https://n8n.automatizacionesmorf.com/webhook/carolina-v3-process`
-- Carolina v3 se encarga de generar y enviar las respuestas al usuario
 
-## 📊 Base de Datos
+### 3.2 Endpoints Llamados (Outbound)
 
-### Tabla: sessions_v3
+| Agente | Endpoint | Método |
+|--------|----------|--------|
+| State Analyzer | `https://n8n.automatizacionesmorf.com/webhook/state-analyzer` | POST |
+| Data Extractor | `https://n8n.automatizacionesmorf.com/webhook/data-extractor` | POST |
+| Order Manager | `http://localhost:5678/webhook/order-manager` | POST |
+| Carolina V3 | `https://n8n.automatizacionesmorf.com/webhook/carolina-v3-process` | POST |
+
+---
+
+## 4. LÓGICA DE NEGOCIO
+
+### 4.1 Validación de Tags Bloqueados
+
+```javascript
+const BLOCKED_TAGS = ['WPP', 'P/W', 'RECO', 'bot_off'];
+
+function shouldBlock(tags) {
+  return tags.some(tag => BLOCKED_TAGS.includes(tag.toUpperCase()));
+}
+```
+
+| Tag | Significado | Acción |
+|-----|-------------|--------|
+| `WPP` | Compra completada vía WhatsApp | Bloquea procesamiento |
+| `P/W` | Proceso web activo | Bloquea procesamiento |
+| `RECO` | Modo remarketing | Bloquea procesamiento |
+| `bot_off` | Bot deshabilitado manualmente | Bloquea procesamiento |
+
+### 4.2 Validación de Antigüedad
+
+```javascript
+const MAX_MESSAGE_AGE_SECONDS = 120; // 2 minutos
+
+function isMessageTooOld(createdAt) {
+  const messageTime = new Date(createdAt);
+  const now = new Date();
+  const ageSeconds = (now - messageTime) / 1000;
+  return ageSeconds > MAX_MESSAGE_AGE_SECONDS;
+}
+```
+
+### 4.3 Normalización de Teléfono
+
+```javascript
+function normalizePhone(phone) {
+  // Remover caracteres no numéricos
+  let clean = phone.replace(/\D/g, '');
+
+  // Agregar prefijo colombiano si falta
+  if (clean.length === 10 && clean.startsWith('3')) {
+    clean = '57' + clean;
+  }
+
+  return clean;
+}
+```
+
+### 4.4 Generación de Session ID
+
+```javascript
+function generateSessionId(phone) {
+  const timestamp = Date.now();
+  return `session_${phone}_${timestamp}`;
+}
+```
+
+### 4.5 Condiciones para Crear Orden
+
+```javascript
+const ORDER_INTENTS = ['resumen_1x', 'resumen_2x', 'resumen_3x'];
+
+function shouldCreateOrder(state, intent) {
+  return (
+    ORDER_INTENTS.includes(intent) &&
+    !state.order_created &&
+    hasMinimumFields(state)
+  );
+}
+
+function hasMinimumFields(state) {
+  const REQUIRED = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];
+  return REQUIRED.every(field => state[field] && state[field].trim() !== '');
+}
+```
+
+---
+
+## 5. MODELO DE DATOS
+
+### 5.1 Tabla `sessions_v3`
+
 ```sql
 CREATE TABLE sessions_v3 (
-  session_id VARCHAR PRIMARY KEY,
-  phone VARCHAR NOT NULL,
-  contact_id VARCHAR,
+  session_id VARCHAR(100) PRIMARY KEY,
+  phone VARCHAR(20) NOT NULL,
+  contact_id VARCHAR(100),
   callbell_conversation_href TEXT,
-  business_id VARCHAR DEFAULT 'somnio',
   state JSONB DEFAULT '{}',
-  mode VARCHAR DEFAULT 'conversacion',
-  tags TEXT[],
-  status VARCHAR DEFAULT 'active',
-  version INTEGER DEFAULT 0,
-  last_processed_at TIMESTAMP,
+  mode VARCHAR(50) DEFAULT 'conversacion',
+  tags TEXT[] DEFAULT '{}',
+  status VARCHAR(20) DEFAULT 'active',
+  version INTEGER DEFAULT 1,
   created_at TIMESTAMP DEFAULT NOW(),
+  updated_at TIMESTAMP DEFAULT NOW(),
   last_activity TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX idx_sessions_phone ON sessions_v3(phone);
+CREATE INDEX idx_sessions_status ON sessions_v3(status);
 ```
 
-**Campos clave:**
-- `state`: Datos capturados (nombre, apellido, pack, etc.)
-- `mode`: 'conversacion' | 'collecting_data'
-- `tags`: Tags de Callbell (WPP, P/W, RECO, bot_off)
-- `version`: Contador para detectar interrupciones en cadenas de mensajes
+**Campos del objeto `state` (JSONB):**
 
-### Tabla: messages_v3
+```json
+{
+  // Datos personales capturados
+  "nombre": "Juan",
+  "apellido": "Pérez",
+  "telefono": "573001234567",
+  "direccion": "Calle 123 #45-67",
+  "barrio": "Centro",
+  "ciudad": "Bogotá",
+  "departamento": "Cundinamarca",
+  "correo": "juan@email.com",
+
+  // Datos de compra
+  "pack": "2x",
+  "precio": 109900,
+
+  // Tracking de intents
+  "_last_intent": "ofrecer_promos",
+  "_intents_vistos": [
+    {"intent": "hola", "orden": 1},
+    {"intent": "captura_datos_si_compra", "orden": 2}
+  ],
+
+  // Flags de acciones
+  "order_created": false,
+  "order_created_at": null,
+
+  // Metadata proactiva
+  "_proactive_timer_active": false,
+  "_proactive_started_at": null,
+  "_first_data_at": null,
+  "_min_data_at": null,
+  "_ofrecer_promos_at": null,
+  "_action_no_data_sent": false,
+  "_action_missing_data_sent": false,
+  "_action_ofrecer_promos_done": false
+}
+```
+
+### 5.2 Tabla `messages_v3`
+
 ```sql
 CREATE TABLE messages_v3 (
   id SERIAL PRIMARY KEY,
-  session_id VARCHAR REFERENCES sessions_v3(session_id),
-  role VARCHAR NOT NULL,
+  session_id VARCHAR(100) REFERENCES sessions_v3(session_id),
+  role VARCHAR(20) NOT NULL, -- 'user' | 'assistant'
   content TEXT NOT NULL,
-  direction VARCHAR NOT NULL,
-  callbell_message_id VARCHAR UNIQUE,
-  business_id VARCHAR DEFAULT 'somnio',
-  intent VARCHAR,
-  payload_raw JSONB DEFAULT '{}',
+  direction VARCHAR(20) NOT NULL, -- 'inbound' | 'outbound'
+  callbell_message_id VARCHAR(100) UNIQUE,
+  intent VARCHAR(100),
+  payload_raw JSONB,
   created_at TIMESTAMP DEFAULT NOW()
 );
+
+CREATE INDEX idx_messages_session ON messages_v3(session_id);
+CREATE INDEX idx_messages_callbell_id ON messages_v3(callbell_message_id);
 ```
 
-**Campos clave:**
-- `callbell_message_id`: UNIQUE constraint para evitar duplicados
-- `role`: "user" | "assistant"
-- `direction`: "inbound" | "outbound"
+---
 
-## 🚫 Filtros y Validaciones
+## 6. INTEGRACIÓN CON OTROS AGENTES
 
-### 1. Tags Bloqueados
+### 6.1 Payload a State Analyzer
+
+```json
+{
+  "phone": "573001234567",
+  "historial": [
+    {"role": "user", "content": "Hola"},
+    {"role": "assistant", "content": "¡Hola! Soy Carolina..."},
+    {"role": "user", "content": "Cuánto cuesta?"}
+  ],
+  "pending_messages": [
+    {"role": "user", "content": "Cuánto cuesta?"}
+  ],
+  "captured_data": {
+    "nombre": "Juan",
+    "_intents_vistos": [{"intent": "hola", "orden": 1}]
+  }
+}
+```
+
+### 6.2 Payload a Data Extractor
+
+```json
+{
+  "phone": "573001234567",
+  "last_message": "Me llamo Juan Pérez, vivo en Bogotá",
+  "captured_data": {
+    "nombre": null,
+    "apellido": null,
+    "ciudad": null
+  }
+}
+```
+
+### 6.3 Payload a Order Manager
+
+```json
+{
+  "phone": "573001234567",
+  "captured_data": {
+    "nombre": "Juan",
+    "apellido": "Pérez",
+    "telefono": "573001234567",
+    "direccion": "Calle 123 #45-67",
+    "ciudad": "Bogotá",
+    "departamento": "Cundinamarca",
+    "pack": "2x"
+  },
+  "source": "historial_v3",
+  "callbell_conversation_href": "https://dash.callbell.eu/conversations/..."
+}
+```
+
+### 6.4 Payload a Carolina V3
+
+```json
+{
+  "phone": "573001234567"
+}
+```
+
+---
+
+## 7. MANEJO DE ERRORES
+
+### 7.1 Errores Esperados
+
+| Error | Causa | Manejo |
+|-------|-------|--------|
+| Mensaje duplicado | `callbell_message_id` ya existe | `ON CONFLICT DO NOTHING` |
+| Sesión no encontrada | Teléfono nuevo | Crear nueva sesión |
+| State Analyzer timeout | Demora >30s | Continuar sin intent (fallback) |
+| Data Extractor falla | API Anthropic caída | Continuar con datos existentes |
+
+### 7.2 Configuración de Timeouts
+
 ```javascript
-const blockedTags = ['WPP', 'P/W', 'RECO', 'bot_off'];
+const TIMEOUTS = {
+  stateAnalyzer: 30000,    // 30 segundos
+  dataExtractor: 30000,    // 30 segundos
+  orderManager: 180000,    // 3 minutos (Bigin es lento)
+  carolina: 10000          // 10 segundos
+};
 ```
-- **WPP:** Cliente ya en proceso de compra/pedido registrado
-- **P/W:** Cliente en proceso web
-- **RECO:** Cliente en recorrido/remarketing
-- **bot_off:** Bot deshabilitado manualmente
 
-### 2. Mensajes Antiguos
+---
+
+## 8. MÉTRICAS Y LOGGING
+
+### 8.1 Eventos Logueados
+
+| Evento | Datos |
+|--------|-------|
+| `message_received` | phone, direction, has_tags |
+| `message_blocked` | phone, reason (tag/age) |
+| `session_created` | session_id, phone |
+| `session_updated` | session_id, mode, version |
+| `intent_detected` | session_id, intent |
+| `data_extracted` | session_id, fields_updated |
+| `order_triggered` | session_id, pack, precio |
+
+### 8.2 Puntos de Observabilidad
+
+Para integración futura con MorfX:
+
 ```javascript
-const ageInSeconds = (now - messageTimestamp) / 1000;
-const isOldMessage = ageInSeconds > 120; // 2 minutos
-```
-Evita procesar mensajes históricos cuando se reconecta el webhook.
-
-### 3. Mensajes Duplicados
-```sql
-ON CONFLICT (callbell_message_id) DO NOTHING
-```
-Usa el UUID de Callbell para detectar y descartar duplicados.
-
-## 🔗 Integraciones
-
-### Callbell API
-- **Webhook recibido:** `POST /webhook/historial-v3-callbell-webhook`
-- **API Key:** Bearer token en headers
-- **Endpoints llamados:**
-  - PATCH `/v1/contacts/{{contact_id}}` - Actualizar tags y custom fields
-
-### Agentes Internos
-1. **State Analyzer:** Detecta intent del usuario
-2. **Data Extractor:** Extrae datos personales con Claude
-3. **Order Manager:** Crea pedidos en Bigin CRM
-4. **Carolina v3:** Genera y envía respuestas
-
-## 📈 Métricas y Logs
-
-### Console Logs Principales:
-- `📥 WEBHOOK RECEIVED` - Mensaje recibido
-- `🏷️ CHECKING TAGS` - Verificación de tags
-- `⏰ CHECKING MESSAGE AGE` - Edad del mensaje
-- `🚫 MESSAGE BLOCKED` - Mensaje bloqueado
-- `✅ Session exists` - Sesión encontrada
-- `🆕 Creating new session` - Nueva sesión
-- `📸 Snapshot built` - Snapshot construido
-- `🔄 MERGING DATA` - Combinando datos
-- `📦 ORDER CREATED` - Orden creada
-
-## ⚙️ Configuración
-
-### Variables de Entorno
-```bash
-POSTGRES_HOST=...
-POSTGRES_DB=...
-POSTGRES_USER=...
-POSTGRES_PASSWORD=...
+// Hook para métricas
+const METRICS_HOOKS = {
+  onMessageReceived: (data) => {},
+  onIntentDetected: (session, intent) => {},
+  onDataCaptured: (session, fields) => {},
+  onOrderCreated: (session, order) => {},
+  onResponseSent: (session, templates) => {}
+};
 ```
 
-### Credenciales n8n
-- **Postgres:** `Postgres Historial v3`
-- **Callbell API:** Header Auth con Bearer token
+---
 
-## 🛠️ Mantenimiento
+## 9. CONSIDERACIONES PARA MORFX
 
-### Nodo Temporal: "eliminar temporal"
-```sql
-DELETE FROM messages_v3
-WHERE session_id IN (
-  SELECT session_id FROM sessions_v3
-  WHERE phone = '573137549286'
-);
+### 9.1 Puntos de Extensión
 
-DELETE FROM sessions_v3
-WHERE phone = '573137549286';
-```
-**Uso:** Limpiar sesiones de testing. **Eliminar en producción.**
+1. **Multi-tenant:** El `session_id` puede incluir `tenant_id` como prefijo
+2. **Multi-canal:** El campo `source` puede diferenciar WhatsApp, Telegram, Web
+3. **A/B Testing:** El state puede incluir `experiment_variant`
+4. **Analytics:** Cada nodo puede emitir eventos a un bus de mensajes
 
-## 🎯 Casos de Uso
+### 9.2 Contratos de API Estables
 
-### 1. Nuevo Cliente (Primera vez)
-```
-Mensaje → Parse → Sin sesión → Create Session → Guardar → State Analyzer → Carolina responde
-```
+```typescript
+interface HistorialWebhookPayload {
+  // Formato Callbell
+  event?: 'message_created';
+  payload?: CallbellPayload;
 
-### 2. Cliente Existente (Conversación continua)
-```
-Mensaje → Parse → Sesión existe → Merge → Guardar → State Analyzer → Carolina responde
-```
+  // Formato directo/test
+  uuid?: string;
+  from?: string;
+  to?: string;
+  text?: string;
+  direction?: 'inbound' | 'outbound';
+  tags?: string[];
+}
 
-### 3. Cliente Completa Datos + Elige Pack
-```
-Mensaje → Parse → Data Extractor → Campos completos + Pack detectado → Create Order → Carolina confirma
+interface HistorialResponse {
+  success: boolean;
+  message: string;
+}
 ```
 
-### 4. Cliente con Tag WPP (Ya procesado)
-```
-Mensaje → Parse → Tag WPP detectado → BLOQUEADO (no procesa)
-```
+### 9.3 Recomendaciones de Escalabilidad
 
-## 🚨 Errores Comunes
-
-### Error: "Session not found"
-**Causa:** Phone no existe en sessions_v3
-**Solución:** Se crea automáticamente
-
-### Error: "Duplicate callbell_message_id"
-**Causa:** Mensaje ya procesado
-**Solución:** Ignora con ON CONFLICT DO NOTHING
-
-### Error: "Timeout en State Analyzer"
-**Causa:** Claude API lenta
-**Solución:** Timeout configurado a 30 segundos
-
-## 📝 Notas Importantes
-
-1. **Respuesta inmediata:** Siempre responde 200 OK a Callbell para no perder mensajes
-2. **Procesamiento asíncrono:** Todo el flujo es asíncrono después de la respuesta
-3. **Idempotencia:** Usa callbell_message_id para evitar duplicados
-4. **State persistence:** El state se guarda en cada paso para no perder datos
-5. **Mode transitions:** collecting_data ↔ conversacion se maneja automáticamente
-
-## 🔄 Dependencias
-
-**Workflows que dependen de Historial v3:**
-- Carolina v3 (triggereado al final)
-- State Analyzer (llamado para análisis)
-- Data Extractor (llamado si collecting_data)
-- Order Manager (llamado si crear orden)
-- Snapshot (lee de sessions_v3 y messages_v3)
-
-**Historial v3 depende de:**
-- Callbell Webhook (trigger)
-- PostgreSQL (persistencia)
-- APIs externas (Claude via State Analyzer/Data Extractor)
+- **Redis Cache:** Para sesiones activas (reduce latencia de lectura)
+- **Queue System:** Para procesamiento asíncrono de mensajes
+- **Read Replicas:** PostgreSQL para snapshots de solo lectura
+- **Rate Limiting:** Por teléfono para evitar spam
