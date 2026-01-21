@@ -558,7 +558,7 @@
     },
     {
       "parameters": {
-        "amount": 8
+        "amount": 10
       },
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.1,
@@ -888,7 +888,7 @@
     "executionOrder": "v1",
     "availableInMCP": false
   },
-  "versionId": "7c8cbf7f-4e2b-45ec-b611-4bd27b417c03",
+  "versionId": "ca56b1b9-9c4e-4dc0-a462-5cc601469dca",
   "meta": {
     "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
   },

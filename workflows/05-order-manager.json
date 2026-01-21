@@ -13,7 +13,7 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        -2496,
+        -2864,
         256
       ],
       "webhookId": "order-manager"
@@ -27,13 +27,13 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -2256,
+        -2624,
         256
       ]
     },
     {
       "parameters": {
-        "jsCode": "// Validate that minimum required fields are complete\nconst data = $json;\nconst capturedData = data.captured_data || {};\n\nconsole.log('✅ VALIDATING DATA FOR ORDER...');\n\n// Minimum required fields to create an order\nconst minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n\n// Check completeness\nconst missingFields = minimumFields.filter(f => !capturedData[f] || capturedData[f].trim() === '');\n\nconst isValid = missingFields.length === 0;\n\nconsole.log('Minimum fields complete:', isValid);\nif (!isValid) {\n  console.log('Missing fields:', missingFields);\n}\n\nreturn {\n  ...data,\n  is_valid: isValid,\n  missing_fields: missingFields,\n  validation_passed: isValid\n};"
+        "jsCode": "// Validate that minimum required fields are complete\nconst data = $node['Parse Request'].json;\nconst capturedData = data.captured_data || {};\n\nconsole.log('✅ VALIDATING DATA FOR ORDER...');\n\n// Minimum required fields to create an order\nconst minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n\n// Check completeness\nconst missingFields = minimumFields.filter(f => !capturedData[f] || capturedData[f].trim() === '');\n\nconst isValid = missingFields.length === 0;\n\nconsole.log('Minimum fields complete:', isValid);\nif (!isValid) {\n  console.log('Missing fields:', missingFields);\n}\n\nreturn {\n  ...data,\n  is_valid: isValid,\n  missing_fields: missingFields,\n  validation_passed: isValid\n};\n"
       },
       "id": "36152830-7537-4bfe-8741-01220a535829",
       "name": "Validate Data",
@@ -120,8 +120,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
-        -1056,
-        -80
+        -1536,
+        -336
       ],
       "credentials": {
         "postgres": {
@@ -141,8 +141,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        -1040,
-        128
+        -352,
+        -96
       ]
     },
     {
@@ -158,6 +158,169 @@
       "position": [
         -1536,
         368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log order creation result\nconst orderResult = $json;\nconst parseRequest = $node['Parse Request'].json;\nconst prepareOrder = $node['Prepare Bigin Order'].json;\n\nconsole.log('📦 ORDER CREATED:', {\n  success: orderResult.success,\n  order_name: orderResult.data?.ordenName,\n  order_id: orderResult.data?.orderId,\n  order_url: orderResult.data?.orderUrl,\n  phone: parseRequest.phone\n});\n\nreturn {\n  phone: parseRequest.phone,\n  order_created: true,\n  order_name: orderResult.data?.ordenName,\n  order_id: orderResult.data?.orderId,\n  order_url: orderResult.data?.orderUrl,\n  amount: prepareOrder.amount,\n  source: parseRequest.source,\n  callbell_conversation_href: parseRequest.callbell_conversation_href,\n  contact_id: parseRequest.contact_id\n};\n"
+      },
+      "id": "11bde070-5c68-4db6-be15-af43c4732ad9",
+      "name": "Log Order Created",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "                                                                                                                                                                                                                                              \n  UPDATE sessions_v3                                                                                                                                                                                                                          \n  SET state = '{{ JSON.stringify($json.updated_state) }}'::jsonb                                                                                                                                                                              \n  WHERE phone = '{{ $json.phone }}'                                                                                                                                                                                                           \n  RETURNING *",
+        "options": {}
+      },
+      "id": "a66c9f0d-c33e-4adb-929a-d96158d833ba",
+      "name": "Update Order Created Flag",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -816,
+        16
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.callbell.eu/v1/contacts/{{ $json.contact_id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "=  {                                                                                                                                                                                                                                           \n    \"name\": \"{{ $json.name }}\",                                                                                                                                                                       \n    \"tags\": [\"WPP\", \"RB\"],                                                                                                                                                                                                                    \n    \"custom_fields\": {                                                                                                                                                                                                                         \n      \"bigin orden\": \"{{ $json.orderUrl }}\"                                                                                                                                                                \n    }                                                                                                                                                                                                                                         \n  }",
+        "options": {}
+      },
+      "id": "e58c9d35-e8bb-4ce3-a0e6-946810cd2740",
+      "name": "HTTP: Add RB Tag",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -784,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar datos para actualizar Callbell (nombre, link Bigin, tags)\nconst biginResponse = $json; // Viene de \"Create Order in Bigin\"\nconst parseRequest = $node['Parse Request'].json;\n\nconsole.log('=== PREPARANDO UPDATE CALLBELL ===');\n\n// Extraer datos de la respuesta de Bigin\nlet ordenName = '';\nlet orderUrl = '';\nlet orderId = '';\n\nif (biginResponse.data) {\n  ordenName = biginResponse.data.ordenName || '';\n  orderUrl = biginResponse.data.orderUrl || '';\n  orderId = biginResponse.data.orderId || '';\n}\n\n// Fallback al captured_data si no hay ordenName\nif (!ordenName && parseRequest.captured_data) {\n  const cd = parseRequest.captured_data;\n  ordenName = `${cd.nombre || ''} ${cd.apellido || ''}`.trim();\n}\n\n// Obtener contact_id - primero de Parse Request, luego de Check Order Exists\nlet contactId = parseRequest.contact_id || '';\nlet callbellHref = parseRequest.callbell_conversation_href || '';\n\nif (!contactId || !callbellHref) {\n  try {\n    const checkOrder = $node['Check Order Exists'].json;\n    if (!contactId) contactId = checkOrder.contact_id || '';\n    if (!callbellHref) callbellHref = checkOrder.callbell_conversation_href || '';\n  } catch(e) {\n    console.log('No se pudo obtener datos de Check Order Exists:', e.message);\n  }\n}\n\nconsole.log('ordenName:', ordenName);\nconsole.log('orderUrl:', orderUrl);\nconsole.log('orderId:', orderId);\nconsole.log('contact_id:', contactId);\nconsole.log('callbell_href:', callbellHref);\n\nreturn {\n  contact_id: contactId,\n  phone: parseRequest.phone,\n  name: ordenName || 'Sin nombre',\n  orderUrl: orderUrl,\n  orderId: orderId,\n  callbell_conversation_href: callbellHref,\n  tags: [\"WPP\", \"RB\"]\n};\n"
+      },
+      "id": "3b2fe796-7a2e-4b88-81c2-d14786200b47",
+      "name": "Arreglar Callbell",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -976,
+        224
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "=  {                                                                                                   \n    \"success\": true,                                                                                  \n    \"order_created\": false,                                                                           \n    \"message\": \"Order already exists for this session\",                                               \n    \"phone\": \"{{ $node['Parse Request'].json.phone }}\"                                                \n  }",
+        "options": {}
+      },
+      "id": "9bab2fa6-d337-4e9e-bfce-d0224b29cebc",
+      "name": "Return Already Created",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -2000,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "=  {                                                                                                   \n    \"success\": true,                                                                                  \n    \"order_created\": false,                                                                           \n    \"message\": \"Order already exists for this session\",                                               \n    \"phone\": \"{{ $node['Parse Request'].json.phone }}\"                                                \n  }",
+        "options": {}
+      },
+      "id": "4c0ce418-d319-466c-867d-47d029c8edac",
+      "name": "Return Already Created1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -432,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  SELECT                                                                                              \n    state->>'order_created' as order_created,                                                         \n    state->>'order_created_at' as order_created_at,                                                   \n    contact_id,                                                                                       \n    callbell_conversation_href,                                                                       \n    CASE                                                                                              \n      WHEN state->>'order_created' = 'true'                                                           \n      AND (state->>'order_created_at')::timestamp > NOW() - INTERVAL '3 days'                         \n      THEN true                                                                                       \n      ELSE false                                                                                      \n    END as skip_order                                                                                 \n  FROM sessions_v3                                                                                    \n  WHERE phone = '{{ $json.phone }}' AND status = 'active'",
+        "options": {}
+      },
+      "id": "7e8e7faa-0c21-4305-8630-b501ff8ff748",
+      "name": "Check Order Exists",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -2432,
+        256
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "46165933-840d-4a16-92b3-323d7358838f",
+              "leftValue": "={{ $json.skip_order }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "61344770-6bd8-44b0-98b8-f97589d0c998",
+      "name": "Order Already Created?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -2256,
+        256
       ]
     }
   ],
@@ -178,7 +341,7 @@
       "main": [
         [
           {
-            "node": "Validate Data",
+            "node": "Check Order Exists",
             "type": "main",
             "index": 0
           }
@@ -229,7 +392,17 @@
       "main": [
         [
           {
-            "node": "Return Success",
+            "node": "Log Order Created",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Arreglar Callbell",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Return Already Created1",
             "type": "main",
             "index": 0
           }
@@ -240,6 +413,67 @@
       "main": [
         []
       ]
+    },
+    "Log Order Created": {
+      "main": [
+        [
+          {
+            "node": "Update Order Created Flag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Arreglar Callbell": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Add RB Tag",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Order Created Flag": {
+      "main": [
+        []
+      ]
+    },
+    "HTTP: Add RB Tag": {
+      "main": [
+        []
+      ]
+    },
+    "Check Order Exists": {
+      "main": [
+        [
+          {
+            "node": "Order Already Created?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Order Already Created?": {
+      "main": [
+        [
+          {
+            "node": "Return Already Created",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "active": true,
@@ -247,7 +481,7 @@
     "executionOrder": "v1",
     "availableInMCP": false
   },
-  "versionId": "177881ed-26f2-41cc-b106-e70db2f1d594",
+  "versionId": "9f10f693-f585-406a-9464-f0c043e38e89",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"

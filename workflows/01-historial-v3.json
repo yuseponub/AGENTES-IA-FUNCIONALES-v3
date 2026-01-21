@@ -276,7 +276,7 @@
     },
     {
       "parameters": {
-        "jsCode": "  // Merge State Analyzer + Data Extractor results\n  const dataExtractor = $json; // Ahora viene directamente de \"Call Data Extractor\"\n  const stateAnalyzer = $node['Call State Analyzer'].json;\n\n  // Obtener datos de sesión desde nodos previos disponibles\n  let sessionData = {};\n  let sessionId = '';\n\n  // Intentar desde diferentes nodos\n  try {\n    const insertUpdate = $node['Insert/Update Session'];\n    if (insertUpdate && insertUpdate.json) {\n      sessionData = insertUpdate.json;\n      sessionId = insertUpdate.json.session_id;\n    }\n  } catch (e) {\n    // No existe\n  }\n\n  try {\n    const mergeExisting = $node['Merge Existing Session'];\n    if (mergeExisting && mergeExisting.json) {\n      sessionData = mergeExisting.json;\n      sessionId = mergeExisting.json.session_id;\n    }\n  } catch (e) {\n    // No existe\n  }\n\n  // Obtener phone\n  const parsePayload = $node['Parse Payload'].json;\n  const phone = parsePayload.phone;\n\n  console.log('🔄 MERGING DATA...');\n  console.log('State Analyzer:', stateAnalyzer);\n  console.log('Data Extractor:', dataExtractor);\n  console.log('Session ID:', sessionId);\n\n  // Merge state: datos anteriores + datos nuevos de Data Extractor\n  const mergedState = {\n    ...(sessionData.state || {}),\n    ...(dataExtractor.captured_data || {}),\n    pack: stateAnalyzer.pack_detectado || (sessionData.state?.pack) || null,\n    _last_intent: stateAnalyzer.intent,\n    _last_mode: stateAnalyzer.new_mode || sessionData.mode,\n    _intents_vistos: dataExtractor.captured_data?._intents_vistos || stateAnalyzer.captured_data?._intents_vistos || []\n  };\n\n  // Verificar campos mínimos necesarios\n  const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad', 'departamento'];\n  const camposMinimosCompletos = minimumFields.every(f =>\n    mergedState[f] && String(mergedState[f]).trim() !== ''\n  );\n\n  console.log('📊 MERGED STATE:', {\n    phone: phone,\n    mode: sessionData.mode,\n    intent: stateAnalyzer.intent,\n    pack: mergedState.pack,\n    campos_completos: camposMinimosCompletos,\n    order_created: mergedState.order_created || false\n  });\n\n  return {\n    phone: phone,\n    session_id: sessionId,\n    captured_data: mergedState,\n    intent: stateAnalyzer.intent,\n    pack_detectado: stateAnalyzer.pack_detectado,\n    campos_minimos_completos: camposMinimosCompletos,\n    order_created: mergedState.order_created || false\n  };"
+        "jsCode": "// Merge State Analyzer + Data Extractor (si existe)\nconst stateAnalyzer = $node['Call State Analyzer'].json;\nconst parsePayload = $node['Parse Payload'].json;\n\n// Obtener datos de Data Extractor (solo si vino por ese path)\nlet extractedPersonalData = {};\ntry {\n  const dataExtractor = $node['Call Data Extractor Simple'].json;\n  if (dataExtractor && dataExtractor.captured_data) {\n    extractedPersonalData = dataExtractor.captured_data;\n    console.log('DATOS PERSONALES EXTRAIDOS:', JSON.stringify(extractedPersonalData));\n  }\n} catch (e) {\n  console.log('No vino por Data Extractor');\n}\n\n// Obtener datos de sesión existente\nlet sessionData = {};\nlet sessionId = '';\n\ntry {\n  const insertUpdate = $node['Insert/Update Session'];\n  if (insertUpdate && insertUpdate.json) {\n    sessionData = insertUpdate.json;\n    sessionId = insertUpdate.json.session_id;\n  }\n} catch (e) {}\n\ntry {\n  const mergeExisting = $node['Merge Existing Session'];\n  if (mergeExisting && mergeExisting.json) {\n    sessionData = mergeExisting.json;\n    sessionId = mergeExisting.json.session_id;\n  }\n} catch (e) {}\n\nconst existingState = sessionData.state || {};\n\n// Merge: datos existentes + datos personales nuevos\nconst mergedState = { ...existingState };\n\n// Solo actualizar campos personales si hay datos nuevos\nconst personalFields = ['nombre', 'apellido', 'telefono', 'direccion', 'barrio', 'departamento', 'ciudad', 'correo'];\npersonalFields.forEach(field => {\n  if (extractedPersonalData[field] && String(extractedPersonalData[field]).trim() !== '') {\n    mergedState[field] = extractedPersonalData[field];\n  }\n});\n\n// Metadatos de State Analyzer\nmergedState._last_intent = stateAnalyzer.intent;\nif (stateAnalyzer.captured_data && stateAnalyzer.captured_data._intents_vistos) {\n  mergedState._intents_vistos = stateAnalyzer.captured_data._intents_vistos;\n}\n\n// Pack y precio (si State Analyzer detectó uno)\nif (stateAnalyzer.pack_detectado) {\n  mergedState.pack = stateAnalyzer.pack_detectado;\n  const precios = { '1x': 77900, '2x': 109900, '3x': 139900 };\n  mergedState.precio = precios[stateAnalyzer.pack_detectado];\n}\n\n// Mode: usar new_mode de State Analyzer si existe, sino mantener actual\nconst finalMode = stateAnalyzer.new_mode || sessionData.mode || 'conversacion';\n\nconsole.log('MERGE RESULT:', {\n  phone: parsePayload.phone,\n  intent: stateAnalyzer.intent,\n  mode: finalMode,\n  pack: mergedState.pack,\n  datos_personales: Object.keys(extractedPersonalData).length > 0\n});\n\nreturn {\n  phone: parsePayload.phone,\n  session_id: sessionId,\n  captured_data: mergedState,\n  intent: stateAnalyzer.intent,\n  final_mode: finalMode\n};\n"
       },
       "id": "f8b7670a-325f-401a-b1e7-4adc849c022f",
       "name": "Merge Data",
@@ -290,7 +290,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "  UPDATE sessions_v3\n  SET state = '{{ JSON.stringify($json.captured_data) }}'::jsonb,\n      mode = '{{ $json.final_mode }}',\n      last_activity = NOW()\n  WHERE phone = '{{ $json.phone }}'\n  RETURNING *",
+        "query": "  UPDATE sessions_v3                                                                                  \n  SET state = '{{ JSON.stringify($json.captured_data) }}'::jsonb,                                     \n      mode = '{{ $json.final_mode }}',                                                                \n      last_activity = NOW()                                                                           \n  WHERE phone = '{{ $json.phone }}'                                                                   \n  RETURNING *, '{{ $json.intent }}' as intent",
         "options": {}
       },
       "id": "4b3abe36-e763-42f7-b758-5773ff6035ba",
@@ -298,7 +298,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
-        -13792,
+        -13920,
         -1456
       ],
       "credentials": {
@@ -319,34 +319,36 @@
           },
           "conditions": [
             {
-              "id": "pack-check",
-              "leftValue": "={{ $node['Merge Data'].json.pack_detectado }}",
-              "rightValue": "",
+              "id": "order-check",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "resumen_1x",
               "operator": {
                 "type": "string",
-                "operation": "notEmpty"
-              }
-            },
-            {
-              "id": "campos-check",
-              "leftValue": "={{ $node['Merge Data'].json.campos_minimos_completos }}",
-              "rightValue": true,
-              "operator": {
-                "type": "boolean",
                 "operation": "equals"
               }
             },
             {
-              "id": "order-check",
-              "leftValue": "={{ $node['Merge Data'].json.order_created }}",
-              "rightValue": false,
+              "id": "1d7d4ac8-771c-4d3a-b34a-30b34d03b5be",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "resumen_2x",
               "operator": {
-                "type": "boolean",
-                "operation": "equals"
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            },
+            {
+              "id": "c4f34483-9535-473f-b64a-10de0ee00480",
+              "leftValue": "={{ $json.intent }}",
+              "rightValue": "resumen_3x",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
               }
             }
           ],
-          "combinator": "and"
+          "combinator": "or"
         },
         "options": {}
       },
@@ -378,41 +380,6 @@
         -13104,
         -1696
       ],
-      "onError": "continueRegularOutput"
-    },
-    {
-      "parameters": {
-        "jsCode": "  // Log order creation result                                                                                                                                                                                                                \n  const orderResult = $json;                                                                                                                                                                                                                  \n  const shouldCreateOrder = $node['Should Create Order?'].json; // ⬅️ CAMBIO AQUÍ                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  console.log('📦 ORDER CREATED:', {                                                                                                                                                                                                          \n    success: orderResult.success,                                                                                                                                                                                                             \n    order_name: orderResult.data?.ordenName || orderResult.order_name,                                                                                                                                                                        \n    phone: shouldCreateOrder.phone                                                                                                                                                                                                            \n  });                                                                                                                                                                                                                                         \n                                                                                                                                                                                                                                              \n  // Update order_created flag in state                                                                                                                                                                                                       \n  const updatedState = {                                                                                                                                                                                                                      \n    ...shouldCreateOrder.state, // ⬅️ CAMBIO AQUÍ (usar state, no merged_state)                                                                                                                                                               \n    order_created: true,                                                                                                                                                                                                                      \n    order_name: orderResult.data?.ordenName || orderResult.order_name,                                                                                                                                                                        \n    order_created_at: new Date().toISOString()                                                                                                                                                                                                \n  };                                                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    phone: shouldCreateOrder.phone,                                                                                                                                                                                                           \n    order_created: true,                                                                                                                                                                                                                      \n    updated_state: updatedState                                                                                                                                                                                                               \n  };"
-      },
-      "id": "287c6bde-bfb0-43ed-b657-e794c718b844",
-      "name": "Log Order Created",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -12864,
-        -1808
-      ]
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "                                                                                                                                                                                                                                              \n  UPDATE sessions_v3                                                                                                                                                                                                                          \n  SET state = '{{ JSON.stringify($json.updated_state) }}'::jsonb                                                                                                                                                                              \n  WHERE phone = '{{ $json.phone }}'                                                                                                                                                                                                           \n  RETURNING *",
-        "options": {}
-      },
-      "id": "02651f29-99e3-46a7-90e1-e7cb8a26769a",
-      "name": "Update Order Created Flag",
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.4,
-      "position": [
-        -12704,
-        -1808
-      ],
-      "credentials": {
-        "postgres": {
-          "id": "RLI7fn3fTdDTnEPF",
-          "name": "Postgres Historial v3"
-        }
-      },
       "onError": "continueRegularOutput"
     },
     {
@@ -459,8 +426,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.4,
       "position": [
-        -13376,
-        -1248
+        -14464,
+        -1888
       ],
       "alwaysOutputData": true,
       "credentials": {
@@ -516,19 +483,6 @@
           "name": "Postgres Historial v3"
         }
       }
-    },
-    {
-      "parameters": {
-        "jsCode": "  // Check if all fields are complete to exit collecting_data mode\n  const mergedData = $json; // Viene de Merge Data\n  const capturedData = mergedData.captured_data || {};\n  const stateAnalyzerIntent = mergedData.intent || 'fallback';\n\n  console.log('🔍 CHECKING FIELDS COMPLETION...');\n  console.log('Captured data:', capturedData);\n\n  // Campos mínimos necesarios para ofrecer promos (sin correo y barrio)\n  const minimumFields = ['nombre', 'apellido', 'telefono', 'direccion', 'departamento', 'ciudad'];\n  const minimumFieldsComplete = minimumFields.every(field => {\n    const value = capturedData[field];\n    return value && String(value).trim() !== '';\n  });\n\n  // Todos los campos (incluyendo correo y barrio)\n  const allFields = ['nombre', 'apellido', 'telefono', 'direccion', 'barrio', 'departamento', 'ciudad', 'correo'];\n  const allFieldsComplete = allFields.every(field => {\n    const value = capturedData[field];\n    return value && String(value).trim() !== '';\n  });\n\n  console.log('Minimum fields complete:', minimumFieldsComplete);\n  console.log('All fields complete:', allFieldsComplete);\n\n  let finalMode = 'collecting_data';\n  let finalIntent = stateAnalyzerIntent;\n  const pack = capturedData.pack || null;\n\n  // Lógica de cambio de modo e intent\n  if (allFieldsComplete) {\n    // Todos los 8 campos completos → cambiar a conversacion\n    finalMode = 'conversacion';\n    console.log('✅ All 8 fields complete! Switching to conversacion mode');\n  } else if (minimumFieldsComplete && !pack) {\n    // Campos mínimos completos pero no todos, y sin pack → ofrecer promos\n    finalIntent = 'ofrecer_promos';\n    finalMode = 'collecting_data'; // Mantener collecting_data para seguir capturando correo/barrio\n    console.log('✅ Minimum fields complete! Changing intent to ofrecer_promos');\n  } else {\n    const missingMinimum = minimumFields.filter(f => !capturedData[f] || String(capturedData[f]).trim() === '');\n    console.log('⏳ Missing minimum fields:', missingMinimum);\n  }\n\n  // CRÍTICO: Actualizar el intent dentro de captured_data para que se guarde en PostgreSQL\n  const updatedCapturedData = {\n    ...capturedData,\n    _last_intent: finalIntent\n  };\n\n  return {\n    ...mergedData,\n    captured_data: updatedCapturedData,\n    final_mode: finalMode,\n    intent: finalIntent,\n    all_fields_complete: allFieldsComplete,\n    minimum_fields_complete: minimumFieldsComplete\n  };"
-      },
-      "id": "285b2941-6eb2-40f7-b31c-1f1c0bc02ded",
-      "name": "Check if All Fields Complete",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -13984,
-        -1456
-      ]
     },
     {
       "parameters": {
@@ -632,47 +586,26 @@
     },
     {
       "parameters": {
-        "method": "PATCH",
-        "url": "=https://api.callbell.eu/v1/contacts/{{ $json.contact_id }}",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/proactive-timer-instance",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "=  {                                                                                                                                                                                                                                           \n    \"name\": \"{{ $json.name }}\",                                                                                                                                                                       \n    \"tags\": [\"WPP\", \"RB\"],                                                                                                                                                                                                                    \n    \"custom_fields\": {                                                                                                                                                                                                                         \n      \"bigin orden\": \"{{ $json.orderUrl }}\"                                                                                                                                                                \n    }                                                                                                                                                                                                                                         \n  }",
-        "options": {}
+        "jsonBody": "=  {                                                                                                                                                                                                               \n    \"phone\": \"{{ $node['Update Session with State Analyzer Results'].json.phone }}\",                                                                                                                              \n    \"session_id\": \"{{ $node['Update Session with State Analyzer Results'].json.session_id }}\"                                                                                                                     \n  }",
+        "options": {
+          "allowUnauthorizedCerts": false,
+          "timeout": 5000
+        }
       },
-      "id": "096eb367-b4b3-4cdd-933e-2cdfd23da896",
-      "name": "HTTP: Add RB Tag",
+      "id": "95400fd3-166e-45fe-adf3-0868ad50a89b",
+      "name": "Start Proactive Timer",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.1,
+      "typeVersion": 4.2,
       "position": [
-        -12672,
-        -1600
-      ]
-    },
-    {
-      "parameters": {
-        "jsCode": "  // FORZAR lectura del nodo Call Order Manager (no usar $json)                                                                                                                                                                               \n  let orderData = $node['Call Order Manager'].json;                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // Si es un array, tomar el primer elemento                                                                                                                                                                                                 \n  if (Array.isArray(orderData)) {                                                                                                                                                                                                             \n    orderData = orderData[0];                                                                                                                                                                                                                 \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  const shouldCreate = $node['Should Create Order?'].json;                                                                                                                                                                                    \n                                                                                                                                                                                                                                              \n  console.log('=== DEBUG - VERIFICANDO FUENTE DE DATOS ===');                                                                                                                                                                                 \n  console.log('Datos de Call Order Manager:', JSON.stringify(orderData, null, 2));                                                                                                                                                            \n  console.log('Order URL extraída:', orderData?.bigin_response?.data?.orderUrl);                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  // Extraer datos de la estructura correcta                                                                                                                                                                                                  \n  let ordenName = '';                                                                                                                                                                                                                         \n  let orderUrl = '';                                                                                                                                                                                                                          \n  let orderId = '';                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  if (orderData.bigin_response?.data) {                                                                                                                                                                                                       \n    ordenName = orderData.bigin_response.data.ordenName;                                                                                                                                                                                      \n    orderUrl = orderData.bigin_response.data.orderUrl;                                                                                                                                                                                        \n    orderId = orderData.bigin_response.data.orderId;                                                                                                                                                                                          \n  } else if (orderData.data) {                                                                                                                                                                                                                \n    ordenName = orderData.data.ordenName;                                                                                                                                                                                                     \n    orderUrl = orderData.data.orderUrl;                                                                                                                                                                                                       \n    orderId = orderData.data.orderId;                                                                                                                                                                                                         \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  // Fallback al state si no hay ordenName                                                                                                                                                                                                    \n  if (!ordenName && shouldCreate.state) {                                                                                                                                                                                                     \n    ordenName = `${shouldCreate.state.nombre || ''} ${shouldCreate.state.apellido || ''}`.trim();                                                                                                                                             \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('=== DATOS FINALES A ENVIAR ===');                                                                                                                                                                                              \n  console.log('ordenName:', ordenName);                                                                                                                                                                                                       \n  console.log('orderUrl:', orderUrl);                                                                                                                                                                                                         \n  console.log('orderId:', orderId);                                                                                                                                                                                                           \n  console.log('contact_id:', shouldCreate.contact_id);                                                                                                                                                                                        \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    contact_id: shouldCreate.contact_id,                                                                                                                                                                                                      \n    phone: shouldCreate.phone,                                                                                                                                                                                                                \n    name: ordenName || 'Sin nombre',                                                                                                                                                                                                          \n    orderUrl: orderUrl || '',                                                                                                                                                                                                                 \n    orderId: orderId || '',                                                                                                                                                                                                                   \n    tags: [\"WPP\", \"RB\"]                                                                                                                                                                                                                       \n  };"
-      },
-      "id": "cdbb5261-54c6-4157-81a2-fcfa450852d3",
-      "name": "Arreglar Callbell",
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
-      "position": [
-        -12864,
-        -1600
-      ]
+        -14192,
+        -1808
+      ],
+      "alwaysOutputData": true,
+      "onError": "continueRegularOutput"
     }
   ],
   "pinData": {},
@@ -837,6 +770,11 @@
             "node": "Merge Data",
             "type": "main",
             "index": 0
+          },
+          {
+            "node": "Start Proactive Timer",
+            "type": "main",
+            "index": 0
           }
         ]
       ]
@@ -845,7 +783,7 @@
       "main": [
         [
           {
-            "node": "Check if All Fields Complete",
+            "node": "Update State in PostgreSQL",
             "type": "main",
             "index": 0
           }
@@ -883,33 +821,6 @@
     },
     "Call Order Manager": {
       "main": [
-        [
-          {
-            "node": "Log Order Created",
-            "type": "main",
-            "index": 0
-          },
-          {
-            "node": "Arreglar Callbell",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Log Order Created": {
-      "main": [
-        [
-          {
-            "node": "Update Order Created Flag",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Update Order Created Flag": {
-      "main": [
         []
       ]
     },
@@ -940,17 +851,6 @@
         [
           {
             "node": "Format Snapshot for State Analyzer",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Check if All Fields Complete": {
-      "main": [
-        [
-          {
-            "node": "Update State in PostgreSQL",
             "type": "main",
             "index": 0
           }
@@ -1007,22 +907,6 @@
           }
         ]
       ]
-    },
-    "HTTP: Add RB Tag": {
-      "main": [
-        []
-      ]
-    },
-    "Arreglar Callbell": {
-      "main": [
-        [
-          {
-            "node": "HTTP: Add RB Tag",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
   },
   "active": true,
@@ -1030,7 +914,7 @@
     "executionOrder": "v1",
     "availableInMCP": false
   },
-  "versionId": "0ea77a81-868b-4ff0-962e-53c39055a306",
+  "versionId": "8369272d-9b9d-4928-b4e0-c4ad9d5a0459",
   "meta": {
     "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
   },
