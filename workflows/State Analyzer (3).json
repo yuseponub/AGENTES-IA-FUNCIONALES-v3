@@ -1,0 +1,186 @@
+{
+  "name": "State Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "state-analyzer",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "9a776b56-ca68-40be-8547-d69cf9773d3c",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -160
+      ],
+      "webhookId": "state-analyzer"
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Parse input from Historial                                                                                                                                                                                                               \n  const input = $json.body || $json;                                                                                                                                                                                                          \n                                                                                                                                                                                                                                              \n  const phone = input.phone || '';                                                                                                                                                                                                            \n  const historial = input.historial || [];                                                                                                                                                                                                    \n  const pendingMessages = input.pending_messages || [];                                                                                                                                                                                       \n  const capturedData = input.captured_data || {};                                                                                                                                                                                             \n                                                                                                                                                                                                                                              \n  // 🔥 Normalizar intents_vistos a formato con orden                                                                                                                                                                                         \n  let intentsVistos = input.intents_vistos || [];                                                                                                                                                                                             \n                                                                                                                                                                                                                                              \n  // Si viene en formato viejo [\"hola\", \"precio\"], convertir a nuevo formato                                                                                                                                                                  \n  if (intentsVistos.length > 0 && typeof intentsVistos[0] === 'string') {                                                                                                                                                                     \n    intentsVistos = intentsVistos.map((intent, index) => ({                                                                                                                                                                                   \n      orden: index + 1,                                                                                                                                                                                                                       \n      intent: intent                                                                                                                                                                                                                          \n    }));                                                                                                                                                                                                                                      \n    console.log('🔄 MIGRADO: intents_vistos convertido a nuevo formato con orden');                                                                                                                                                           \n  }                                                                                                                                                                                                                                           \n                                                                                                                                                                                                                                              \n  console.log('📊 STATE ANALYZER INPUT:');                                                                                                                                                                                                    \n  console.log('Phone:', phone);                                                                                                                                                                                                               \n  console.log('Historial messages:', historial.length);                                                                                                                                                                                       \n  console.log('Pending messages:', pendingMessages.length);                                                                                                                                                                                   \n  console.log('Intents vistos:', intentsVistos);                                                                                                                                                                                              \n                                                                                                                                                                                                                                              \n  return {                                                                                                                                                                                                                                    \n    phone,                                                                                                                                                                                                                                    \n    historial,                                                                                                                                                                                                                                \n    pending_messages: pendingMessages,                                                                                                                                                                                                        \n    captured_data: capturedData,                                                                                                                                                                                                              \n    intents_vistos: intentsVistos                                                                                                                                                                                                             \n  };"
+      },
+      "id": "a30d21cc-c93c-4a22-acf1-86dfc5f78728",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const input = $json;\nconst historial = input.historial || [];\nconst pendingMessages = input.pending_messages || [];\nconst capturedData = input.captured_data || {};\nconst intentsVistos = input.intents_vistos || [];\n\nfunction normalizeIntent(intent) {\n  if (!intent) return '';\n  let n = intent.toLowerCase().trim();\n  n = n.replace(/\\s+/g, '_');\n  n = n.replace(/\\+/g, '_');\n  n = n.replace(/-/g, '_');\n  n = n.replace(/[^a-z0-9_]/g, '');\n  return n;\n}\n\nconst intentsVistosSimple = intentsVistos\n  .map(item => typeof item === 'string' ? item : item.intent)\n  .map(intent => normalizeIntent(intent));\n\nconst lpPart1 = 'ho?la!?\\\\s*me\\\\s*inte?re?sa\\\\s*comprar\\\\s*u?n?\\\\s*';\nconst lpPart2 = '(elixir|elxir|elixi|elixr)?\\\\s*(del|d)?\\\\s*sue[ñn]?o?\\\\.?';\nconst landingPagePattern = new RegExp(lpPart1 + lpPart2, 'gi');\n\nconst claudeMessages = historial.map(msg => ({\n  role: msg.role === 'assistant' ? 'assistant' : 'user',\n  content: msg.role === 'user' ? msg.content.replace(landingPagePattern, 'hola ') : msg.content\n}));\n\nlet focusMessage = '';\nif (pendingMessages.length > 0) {\n  const pendingList = pendingMessages.map((m, i) => (i+1) + '. \"' + m.content + '\"').join('\\n');\n  const f = [];\n  f.push('\\n\\nMENSAJES PENDIENTES (los mas recientes que necesitas analizar):\\n');\n  f.push(pendingList);\n  f.push('\\n\\nIMPORTANTE: Analiza PRINCIPALMENTE los mensajes pendientes.');\n  focusMessage = f.join('');\n}\n\nlet lastAssistantMessage = '';\nfor (let i = historial.length - 1; i >= 0; i--) {\n  if (historial[i].role === 'assistant') {\n    lastAssistantMessage = historial[i].content.toLowerCase();\n    break;\n  }\n}\n\nlet contextoSi = '';\nif (lastAssistantMessage.includes('confirmar tu compra')) {\n  contextoSi = '\\n\\n**CONTEXTO CRITICO:** El bot pregunto \"confirmar tu compra\". ';\n  contextoSi += 'Si el usuario dice \"si/ok/dale\" -> intent: compra_confirmada';\n} else if (lastAssistantMessage.includes('deseas adquirir') || lastAssistantMessage.includes('te gustaria adquirir')) {\n  contextoSi = '\\n\\n**CONTEXTO CRITICO:** El bot pregunto \"deseas adquirir\". ';\n  contextoSi += 'Si el usuario dice \"si/ok/dale\" -> intent: captura_datos_si_compra';\n} else if (lastAssistantMessage.includes('cual eliges') || lastAssistantMessage.includes('cual deseas')) {\n  contextoSi = '\\n\\n**CONTEXTO CRITICO:** El bot pregunto \"cual eliges/deseas\". ';\n  contextoSi += 'Si el usuario dice \"1x/2x/3x/uno/dos/tres\" -> detectar pack';\n}\n\nlet mensajeIntentsVistos = '';\nif (intentsVistosSimple.length > 0) {\n  const m = [];\n  m.push('\\n\\n**INTENTS YA PROCESADOS (evita repetirlos):**\\n');\n  m.push('El bot ya respondio a estos intents: ');\n  m.push(intentsVistosSimple.join(', '));\n  m.push('\\nSi el usuario pregunta algo similar, retorna \"fallback\" ');\n  m.push('(excepto variantes como modopago -> modopago2).');\n  mensajeIntentsVistos = m.join('');\n}\n\nconst p = [];\np.push('Eres un analizador de intents para Somnio (producto: Elixir del Sueno).\\n');\np.push('Tu tarea es detectar el intent y verificar si los datos personales estan completos. ');\np.push('NO generes respuestas.\\n\\n');\np.push('Analiza el historial completo, prestando especial atencion a los mensajes pendientes.');\np.push(focusMessage);\np.push(contextoSi);\np.push(mensajeIntentsVistos);\np.push('\\n\\nRetorna JSON:\\n\\n');\np.push('{\\n  \"intent\": \"string\",\\n  \"campos_completos\": false,\\n  \"campos_faltantes\": [],\\n  \"pack_detectado\": null\\n}\\n\\n');\np.push('**Intents permitidos:**\\n');\np.push('- hola (saludo inicial)\\n');\np.push('- precio (pregunta precio/valor/costo/informacion/info/dame mas info)\\n');\np.push('- info_promociones (que promociones tienen/paquetes/ofertas/descuentos)\\n');\np.push('- contenido_envase (cuantas capsulas/comprimidos tiene)\\n');\np.push('- como_se_toma (modo de uso/dosis/instrucciones)\\n');\np.push('- modopago (formas de pago/contraentrega/transferencia - PRIMERA VEZ)\\n');\np.push('- metodos_de_pago (que otros metodos/otras formas de pago - DESPUES de modopago)\\n');\np.push('- modopago2 (es contraentrega/pago al recibir - confirmacion DESPUES de modopago)\\n');\np.push('- envio (envio/cobertura/donde llegan)\\n');\np.push('- invima (registro sanitario/certificado)\\n');\np.push('- ubicacion (sede fisica/tienda)\\n');\np.push('- contraindicaciones (efectos/precauciones)\\n');\np.push('- sisirve (si sirve/es efectivo/funciona/sera que me sirve)\\n');\np.push('- captura_datos_si_compra (quiero comprar/lo quiero/enviamelo/dice SI a deseas adquirir)\\n');\np.push('- ofrecer_promos (AUTO: cuando datos completos sin pack)\\n');\np.push('- resumen_1x/resumen_2x/resumen_3x (AUTO: cuando cliente elige pack)\\n');\np.push('- compra_confirmada (dice SI despues de confirmar tu compra SOLAMENTE)\\n');\np.push('- no_confirmado (cliente dice no/despues/lo pienso a confirmacion)\\n');\np.push('- no_interesa (no me interesa/no lo quiero)\\n');\np.push('- fallback (no match con ninguno O intent repetido)\\n\\n');\np.push('**Intents combinados:**\\n');\np.push('- hola+precio, hola+como_se_toma, hola+envio, hola+modopago, hola+ubicacion\\n');\np.push('- hola+contenido_envase, hola+invima, hola+contraindicaciones, hola+sisirve\\n');\np.push('- hola+info_promociones, hola+captura_datos_si_compra\\n\\n');\np.push('**Verificacion de datos completos (lee del historial):**\\n');\np.push('Revisa si en el historial el cliente proporciono estos 8 datos: ');\np.push('nombre, apellido, telefono, direccion, barrio, departamento, ciudad, correo\\n');\np.push('- campos_completos: true SOLO si los 8 campos fueron mencionados\\n');\np.push('- campos_faltantes: array con campos que faltan (ej: [\"barrio\"])\\n');\np.push('- NOTA: Si dijo \"no tengo correo\" o \"sin barrio\", cuenta como completo\\n\\n');\np.push('**Deteccion de pack:**\\n');\np.push('Si cliente menciona \"1x\", \"2x\", \"3x\", \"uno\", \"dos\", \"tres\":\\n');\np.push('- pack_detectado: \"1x\" | \"2x\" | \"3x\"\\n\\n');\np.push('Retorna SOLO el JSON, sin markdown ni texto adicional.');\n\nconst systemPrompt = p.join('');\n\nreturn {\n  system: systemPrompt,\n  messages: claudeMessages,\n  phone: input.phone,\n  captured_data: capturedData,\n  intents_vistos: intentsVistos,\n  pending_count: pendingMessages.length,\n  current_mode: input.current_mode || 'conversacion'\n};\n"
+      },
+      "id": "927d69ad-affd-4fce-b452-3c8a7f5afffe",
+      "name": "Prepare Claude Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        80,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"system\": $json.system,\n  \"messages\": $json.messages\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "501f8256-70b6-44f8-82a9-016ed97ac993",
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        304,
+        -160
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "a60NiYpV50szsxWN",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const claudeResponse = $json;\nconst prevData = $node[\"Prepare Claude Messages\"].json;\nlet intentsVistos = prevData.intents_vistos || [];\n\nconst responseText = claudeResponse.content?.[0]?.text || '{\"intent\":\"fallback\"}';\n\nlet cleanText = responseText.trim();\nif (cleanText.startsWith('```json')) {\n  cleanText = cleanText.replace(/^```json\\s*/, '').replace(/\\s*```$/, '');\n} else if (cleanText.startsWith('```')) {\n  cleanText = cleanText.replace(/^```\\s*/, '').replace(/\\s*```$/, '');\n}\n\nlet parsed;\ntry {\n  parsed = JSON.parse(cleanText);\n} catch (e) {\n  console.log('Error parsing Claude response:', e);\n  parsed = { intent: 'fallback', campos_completos: false, campos_faltantes: [], pack_detectado: null };\n}\n\nlet intent = parsed.intent || 'fallback';\nlet camposCompletos = parsed.campos_completos || false;\nlet camposFaltantes = parsed.campos_faltantes || [];\nlet packDetectado = parsed.pack_detectado;\n\n// Campos que podemos tolerar si faltan\nconst camposTolerados = ['barrio', 'correo'];\nconst faltanSoloTolerados = camposFaltantes.every(c => camposTolerados.includes(c));\n\nif (!camposCompletos && camposFaltantes.length > 0 && faltanSoloTolerados) {\n  camposCompletos = true;\n  console.log('TOLERADO: Solo faltan campos opcionales:', camposFaltantes);\n}\n\nlet metadatos = {\n  _last_intent: prevData.captured_data._last_intent,\n  _intents_vistos: prevData.captured_data._intents_vistos || intentsVistos,\n  pack: prevData.captured_data.pack || null,\n  precio: prevData.captured_data.precio || null\n};\n\nif (prevData.captured_data._last_intent &&\n    prevData.captured_data._last_intent !== 'fallback' &&\n    !intentsVistos.includes(prevData.captured_data._last_intent)) {\n  intentsVistos.push(prevData.captured_data._last_intent);\n  console.log('SINCRONIZADO:', prevData.captured_data._last_intent);\n}\n\nconst hasSeenIntent = (intentName) => {\n  return intentsVistos.includes(intentName) || prevData.captured_data._last_intent === intentName;\n};\nconst hasSeenAnyIntent = (intentNames) => {\n  return intentNames.some(name => intentsVistos.includes(name) || prevData.captured_data._last_intent === name);\n};\n\nconsole.log('ESTADO:', { intent, campos_completos: camposCompletos, campos_faltantes: camposFaltantes, intents_vistos: intentsVistos });\n\nif (intent.startsWith('resumen_')) {\n  if (!hasSeenIntent('ofrecer_promos')) {\n    console.log('BLOQUEADO: resumen requiere ofrecer_promos');\n    intent = 'fallback';\n  }\n}\n\nif (intent === 'compra_confirmada') {\n  if (!hasSeenAnyIntent(['resumen_1x', 'resumen_2x', 'resumen_3x'])) {\n    console.log('BLOQUEADO: compra_confirmada requiere resumen');\n    intent = 'fallback';\n  }\n}\n\nif (intent === 'no_confirmado') {\n  if (!hasSeenAnyIntent(['resumen_1x', 'resumen_2x', 'resumen_3x'])) {\n    console.log('BLOQUEADO: no_confirmado requiere resumen');\n    intent = 'fallback';\n  }\n}\n\nif (camposCompletos && !packDetectado && !metadatos.pack && intent !== 'ofrecer_promos') {\n  if (intent === 'fallback' || intent === 'captura_datos_si_compra') {\n    intent = 'ofrecer_promos';\n    console.log('AUTO-DETECT: ofrecer_promos (campos completos segun historial)');\n    if (!intentsVistos.includes('ofrecer_promos')) {\n      intentsVistos.push('ofrecer_promos');\n    }\n  }\n}\n\nif (packDetectado && hasSeenIntent('ofrecer_promos')) {\n  intent = 'resumen_' + packDetectado;\n  metadatos.pack = packDetectado;\n  metadatos.precio = { '1x': 77900, '2x': 109900, '3x': 139900 }[packDetectado];\n  console.log('AUTO-DETECT: resumen_' + packDetectado);\n} else if (packDetectado && !hasSeenIntent('ofrecer_promos')) {\n  console.log('BLOQUEADO: pack sin ofrecer_promos');\n  intent = 'fallback';\n}\n\nlet newMode = null;\nif (intent === 'captura_datos_si_compra' || intent === 'hola+captura_datos_si_compra') {\n  newMode = 'collecting_data';\n} else if (intent.startsWith('resumen_')) {\n  newMode = 'conversacion';\n  console.log('MODE: Cambiando a conversacion');\n}\n\nmetadatos._last_intent = intent;\nmetadatos._intents_vistos = intentsVistos;\n\nif (intent && intent !== 'fallback' && !intentsVistos.includes(intent)) {\n  intentsVistos.push(intent);\n  metadatos._intents_vistos = intentsVistos;\n}\n\nconsole.log('OUTPUT:', { intent, new_mode: newMode, pack_detectado: packDetectado, campos_faltantes: camposFaltantes });\n\nreturn {\n  phone: prevData.phone,\n  intent,\n  new_mode: newMode,\n  captured_data: metadatos,\n  pack_detectado: packDetectado,\n  _debug_campos_faltantes: camposFaltantes\n};\n"
+      },
+      "id": "0efb3ecd-8ce1-4bec-b84a-2a5048eccc2f",
+      "name": "Extract Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "65753bdd-a221-4426-a1f8-b967c1b95590",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        736,
+        -160
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Claude Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Claude Messages": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Extract Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Response": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "3821ac13-db8c-4812-ba8e-4d4e4a6e218a",
+  "meta": {
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "niGx5lqP0bKooMai",
+  "tags": []
+}

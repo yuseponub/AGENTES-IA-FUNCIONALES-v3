@@ -1,0 +1,258 @@
+{
+  "name": "Data Extractor Simple - DSL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "data-extractor",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "e8dbb572-ef0d-4d26-bdf0-857c459543d6",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -928,
+        1616
+      ],
+      "webhookId": "data-extractor"
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Parse input from Historial\n  const input = $json.body || $json;\n\n  const phone = input.phone || '';\n  const lastMessage = input.last_message || '';\n  const capturedData = input.captured_data || {};\n\n  console.log('📥 DATA EXTRACTOR INPUT:');\n  console.log('Phone:', phone);\n  console.log('Last Message:', lastMessage);\n  console.log('Already captured:', Object.keys(capturedData).length, 'fields');\n\n  return {\n    phone,\n    last_message: lastMessage,\n    captured_data: capturedData\n  };"
+      },
+      "id": "4dd93ba2-0097-4158-a267-f347b1dfce37",
+      "name": "Parse Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -704,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Prepare Claude API call                                                                                                                                                                                      \n  const input = $json;                                                                                                                                                                                            \n  const lastMessage = input.last_message || '';                                                                                                                                                                   \n  const capturedData = input.captured_data || {};                                                                                                                                                                 \n                                                                                                                                                                                                                  \n  console.log('🤖 Preparing Claude API call for message:', lastMessage);                                                                                                                                          \n                                                                                                                                                                                                                  \n  // Mostrar datos ya capturados para contexto                                                                                                                                                                    \n  const datosExistentes = Object.keys(capturedData)                                                                                                                                                               \n    .filter(k => !k.startsWith('_') && k !== 'pack' && k !== 'precio')                                                                                                                                            \n    .filter(k => capturedData[k] && String(capturedData[k]).trim() !== '')                                                                                                                                        \n    .map(k => `${k}: ${capturedData[k]}`)                                                                                                                                                                         \n    .join(', ');                                                                                                                                                                                                  \n                                                                                                                                                                                                                  \n  const systemPrompt = 'Eres un extractor de datos especializado para entregas en Colombia. Tu ÚNICA tarea es extraer información personal y de envío del mensaje del usuario.\\n\\n' +                             \n    'IGNORA completamente el intent del mensaje. SOLO extrae datos.\\n\\n' +                                                                                                                                        \n    (datosExistentes ? `**DATOS YA CAPTURADOS:** ${datosExistentes}\\n\\n` : '') +                                                                                                                                  \n    'Analiza el mensaje y retorna JSON:\\n\\n' +                                                                                                                                                                    \n    '{\\n' +                                                                                                                                                                                                       \n    '  \"extracted_data\": {\\n' +                                                                                                                                                                                   \n    '    \"nombre\": \"...\",\\n' +                                                                                                                                                                                    \n    '    \"apellido\": \"...\",\\n' +                                                                                                                                                                                  \n    '    \"telefono\": \"...\",\\n' +                                                                                                                                                                                  \n    '    \"direccion\": \"...\",\\n' +                                                                                                                                                                                 \n    '    \"barrio\": \"...\",\\n' +                                                                                                                                                                                    \n    '    \"ciudad\": \"...\",\\n' +                                                                                                                                                                                    \n    '    \"departamento\": \"...\",\\n' +                                                                                                                                                                              \n    '    \"correo\": \"...\",\\n' +                                                                                                                                                                                    \n    '    \"indicaciones_extra\": \"...\"\\n' +                                                                                                                                                                         \n    '  }\\n' +                                                                                                                                                                                                     \n    '}\\n\\n' +                                                                                                                                                                                                     \n    '**REGLAS IMPORTANTES:**\\n\\n' +                                                                                                                                                                               \n    '1. **DIRECCIÓN:** Extrae la dirección base (Calle/Carrera/Av/Transversal/Diagonal + número)\\n\\n' +                                                                                                           \n    '2. **INDICACIONES EXTRA:** Captura CUALQUIER información adicional de ubicación:\\n' +                                                                                                                        \n    '   - Referencias: \"frente al parque\", \"al lado de la tienda\", \"diagonal a la iglesia\"\\n' +                                                                                                                   \n    '   - Detalles: \"torre 2\", \"apto 501\", \"piso 3\", \"local 5\", \"casa 2\"\\n' +                                                                                                                                     \n    '   - Características: \"casa azul\", \"portón rojo\", \"edificio amarillo\"\\n' +                                                                                                                                   \n    '   - Instrucciones: \"preguntar por Juan\", \"llamar al llegar\", \"tocar timbre 3 veces\"\\n' +                                                                                                                    \n    '   - Conjunto/urbanización: \"conjunto Los Pinos\", \"edificio Torres del Sol\"\\n\\n' +                                                                                                                           \n    '3. **BARRIO - SER FLEXIBLE:** Detecta el barrio aunque NO diga \"barrio\":\\n' +                                                                                                                                \n    '   - Si menciona un nombre de sector/zona después de la dirección → es barrio\\n' +                                                                                                                           \n    '   - Ejemplos: \"Cra 5 #10-20, La Castellana\" → barrio: \"La Castellana\"\\n' +                                                                                                                                  \n    '   - Nombres como \"Cabecera\", \"El Prado\", \"Kennedy\", \"Suba\", \"Chapinero\" son barrios\\n' +                                                                                                                    \n    '   - Si hay un nombre propio de lugar que no es ciudad → probablemente es barrio\\n\\n' +                                                                                                                      \n    '4. **NOMBRES:** \"Jose Garcia\" → nombre: \"Jose\", apellido: \"Garcia\"\\n\\n' +                                                                                                                                    \n    '5. **TELÉFONO:** Acepta: \"3137549286\", \"313 754 9286\", \"+57 313 754 9286\"\\n\\n' +                                                                                                                             \n    '6. **SI DICE \"es el mismo\":** Se refiere al teléfono ya capturado\\n\\n' +                                                                                                                                     \n    '7. **SI NO ENCUENTRAS ALGO:** Deja el campo vacío \"\", NO inventes datos\\n\\n' +                                                                                                                               \n    'Retorna SOLO el JSON, sin markdown ni texto adicional.';                                                                                                                                                     \n                                                                                                                                                                                                                  \n  return {                                                                                                                                                                                                        \n    system: systemPrompt,                                                                                                                                                                                         \n    messages: [                                                                                                                                                                                                   \n      {                                                                                                                                                                                                           \n        role: 'user',                                                                                                                                                                                             \n        content: lastMessage                                                                                                                                                                                      \n      }                                                                                                                                                                                                           \n    ],                                                                                                                                                                                                            \n    phone: input.phone,                                                                                                                                                                                           \n    captured_data: capturedData                                                                                                                                                                                   \n  };"
+      },
+      "id": "83a3f863-1219-4184-8d33-bc5a74311d06",
+      "name": "Prepare Claude Messages",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -496,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 1024,\n  \"system\": $json.system,\n  \"messages\": $json.messages\n} }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "f941b28d-8901-4f3a-b239-1bc15a284b51",
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -272,
+        1616
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "a60NiYpV50szsxWN",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Extract data from Claude response\n  const claudeResponse = $json;\n  const prevData = $node[\"Prepare Claude Messages\"].json;\n\n  const responseText = claudeResponse.content?.[0]?.text || '{\"extracted_data\":{}}';\n\n  // Clean markdown backticks\n  let cleanText = responseText.trim();\n  if (cleanText.startsWith('```json')) {\n    cleanText = cleanText.replace(/^```json\\s*/, '').replace(/\\s*```$/, '');\n  } else if (cleanText.startsWith('```')) {\n    cleanText = cleanText.replace(/^```\\s*/, '').replace(/\\s*```$/, '');\n  }\n\n  // Parse JSON response\n  let extracted = {};\n  try {\n    const parsed = JSON.parse(cleanText);\n    extracted = parsed.extracted_data || {};\n  } catch (e) {\n    console.log('Error parsing Claude response:', e);\n    extracted = {};\n  }\n\n  console.log('🤖 CLAUDE EXTRACTED:', JSON.stringify(extracted));\n\n  return {\n    phone: prevData.phone,\n    extracted_data: extracted,\n    captured_data: prevData.captured_data,\n    last_message: prevData.last_message\n  };"
+      },
+      "id": "870195a3-3a46-428f-8550-d5edbb7c73bd",
+      "name": "Extract Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -48,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Detect negations in user message\n  const data = $json;\n  const userText = (data.last_message || '').toLowerCase();\n\n  console.log('🔍 DETECTING NEGATIONS...');\n  console.log('User message:', userText);\n\n  // Negation patterns for each field\n  const negationPatterns = {\n    'correo': ['no tengo correo', 'no cuento con correo', 'sin correo', 'no correo', 'no tengo email', 'no email'],\n    'barrio': ['no tengo barrio', 'no se el barrio', 'sin barrio', 'no barrio']\n  };\n\n  // Check for negations\n  const negatedFields = {};\n\n  Object.keys(negationPatterns).forEach(field => {\n    const patterns = negationPatterns[field];\n    const hasNegation = patterns.some(pattern => userText.includes(pattern));\n\n    if (hasNegation) {\n      console.log(`✅ Detected negation for field: ${field}`);\n      negatedFields[field] = 'N/A';\n    }\n  });\n\n  // Merge negated fields into extracted_data\n  const extractedData = { ...data.extracted_data, ...negatedFields };\n\n  return {\n    phone: data.phone,\n    extracted_data: extractedData,\n    captured_data: data.captured_data\n  };"
+      },
+      "id": "33b7959c-1b71-4d32-bdba-0dc9477e33fb",
+      "name": "Detect Negations",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        176,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Clean and normalize extracted data                                                                                                                                                                           \n  const data = $json;                                                                                                                                                                                             \n  const extracted = data.extracted_data || {};                                                                                                                                                                    \n  const existingData = data.captured_data || {};                                                                                                                                                                  \n                                                                                                                                                                                                                  \n  console.log('🧹 CLEANING DATA...');                                                                                                                                                                             \n                                                                                                                                                                                                                  \n  // Helper functions                                                                                                                                                                                             \n  function capitalize(str) {                                                                                                                                                                                      \n    if (!str || typeof str !== 'string') return str;                                                                                                                                                              \n    return str.trim().toLowerCase().split(' ')                                                                                                                                                                    \n      .map(word => word.charAt(0).toUpperCase() + word.slice(1))                                                                                                                                                  \n      .join(' ');                                                                                                                                                                                                 \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  function normalizePhone(phone) {                                                                                                                                                                                \n    if (!phone || typeof phone !== 'string') return phone;                                                                                                                                                        \n    let cleaned = phone.replace(/\\D/g, '');                                                                                                                                                                       \n    if (cleaned.startsWith('57') && cleaned.length > 10) {                                                                                                                                                        \n      cleaned = cleaned.substring(2);                                                                                                                                                                             \n    }                                                                                                                                                                                                             \n    if (cleaned.length === 10) {                                                                                                                                                                                  \n      return '57' + cleaned;                                                                                                                                                                                      \n    }                                                                                                                                                                                                             \n    return phone;                                                                                                                                                                                                 \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  const departamentosMap = {                                                                                                                                                                                      \n    'antioquia': 'Antioquia', 'atlantico': 'Atlántico', 'bogota': 'Bogotá D.C.',                                                                                                                                  \n    'bogota d.c.': 'Bogotá D.C.', 'bolivar': 'Bolívar', 'boyaca': 'Boyacá',                                                                                                                                       \n    'caldas': 'Caldas', 'caqueta': 'Caquetá', 'cauca': 'Cauca', 'cesar': 'Cesar',                                                                                                                                 \n    'cordoba': 'Córdoba', 'cundinamarca': 'Cundinamarca', 'choco': 'Chocó',                                                                                                                                       \n    'huila': 'Huila', 'guajira': 'La Guajira', 'la guajira': 'La Guajira',                                                                                                                                        \n    'magdalena': 'Magdalena', 'meta': 'Meta', 'narino': 'Nariño', 'nariño': 'Nariño',                                                                                                                             \n    'norte de santander': 'Norte de Santander', 'quindio': 'Quindío', 'quindío': 'Quindío',                                                                                                                       \n    'risaralda': 'Risaralda', 'santander': 'Santander', 'sucre': 'Sucre',                                                                                                                                         \n    'tolima': 'Tolima', 'valle del cauca': 'Valle del Cauca', 'valle': 'Valle del Cauca'                                                                                                                          \n  };                                                                                                                                                                                                              \n                                                                                                                                                                                                                  \n  const ciudadesMap = {                                                                                                                                                                                           \n    'bogota': 'Bogotá', 'medellin': 'Medellín', 'cali': 'Cali',                                                                                                                                                   \n    'barranquilla': 'Barranquilla', 'cartagena': 'Cartagena', 'cucuta': 'Cúcuta',                                                                                                                                 \n    'bucaramanga': 'Bucaramanga', 'pereira': 'Pereira', 'santa marta': 'Santa Marta',                                                                                                                             \n    'ibague': 'Ibagué', 'pasto': 'Pasto', 'manizales': 'Manizales', 'neiva': 'Neiva',                                                                                                                             \n    'villavicencio': 'Villavicencio', 'armenia': 'Armenia', 'valledupar': 'Valledupar',                                                                                                                           \n    'monteria': 'Montería', 'sincelejo': 'Sincelejo', 'popayan': 'Popayán',                                                                                                                                       \n    'tunja': 'Tunja', 'florencia': 'Florencia', 'quibdo': 'Quibdó', 'riohacha': 'Riohacha'                                                                                                                        \n  };                                                                                                                                                                                                              \n                                                                                                                                                                                                                  \n  // Clean each field                                                                                                                                                                                             \n  const cleanedData = {};                                                                                                                                                                                         \n                                                                                                                                                                                                                  \n  if (extracted.nombre) cleanedData.nombre = capitalize(extracted.nombre);                                                                                                                                        \n  if (extracted.apellido) cleanedData.apellido = capitalize(extracted.apellido);                                                                                                                                  \n  if (extracted.telefono) cleanedData.telefono = normalizePhone(extracted.telefono);                                                                                                                              \n                                                                                                                                                                                                                  \n  // 🆕 DIRECCIÓN + INDICACIONES EXTRA                                                                                                                                                                            \n  let direccionFinal = '';                                                                                                                                                                                        \n                                                                                                                                                                                                                  \n  // 1. Si hay nueva dirección extraída                                                                                                                                                                           \n  if (extracted.direccion && extracted.direccion.trim() !== '') {                                                                                                                                                 \n    direccionFinal = capitalize(extracted.direccion);                                                                                                                                                             \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  // 2. Si hay indicaciones extra                                                                                                                                                                                 \n  if (extracted.indicaciones_extra && extracted.indicaciones_extra.trim() !== '') {                                                                                                                               \n    const indicaciones = capitalize(extracted.indicaciones_extra);                                                                                                                                                \n                                                                                                                                                                                                                  \n    if (direccionFinal) {                                                                                                                                                                                         \n      // Agregar a la nueva dirección                                                                                                                                                                             \n      direccionFinal = `${direccionFinal} - ${indicaciones}`;                                                                                                                                                     \n    } else if (existingData.direccion) {                                                                                                                                                                          \n      // Agregar a la dirección existente (si no está duplicada)                                                                                                                                                  \n      const existingLower = existingData.direccion.toLowerCase();                                                                                                                                                 \n      const indicacionesLower = indicaciones.toLowerCase();                                                                                                                                                       \n      if (!existingLower.includes(indicacionesLower)) {                                                                                                                                                           \n        direccionFinal = `${existingData.direccion} - ${indicaciones}`;                                                                                                                                           \n      }                                                                                                                                                                                                           \n    } else {                                                                                                                                                                                                      \n      // Solo indicaciones (raro, pero por si acaso)                                                                                                                                                              \n      direccionFinal = indicaciones;                                                                                                                                                                              \n    }                                                                                                                                                                                                             \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  if (direccionFinal) {                                                                                                                                                                                           \n    cleanedData.direccion = direccionFinal;                                                                                                                                                                       \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  // Barrio                                                                                                                                                                                                       \n  if (extracted.barrio) {                                                                                                                                                                                         \n    cleanedData.barrio = extracted.barrio === 'N/A' ? 'N/A' : capitalize(extracted.barrio);                                                                                                                       \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  // Ciudad                                                                                                                                                                                                       \n  if (extracted.ciudad) {                                                                                                                                                                                         \n    const lower = extracted.ciudad.toLowerCase().trim();                                                                                                                                                          \n    cleanedData.ciudad = ciudadesMap[lower] || capitalize(extracted.ciudad);                                                                                                                                      \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  // Departamento                                                                                                                                                                                                 \n  if (extracted.departamento) {                                                                                                                                                                                   \n    const lower = extracted.departamento.toLowerCase().trim();                                                                                                                                                    \n    cleanedData.departamento = departamentosMap[lower] || capitalize(extracted.departamento);                                                                                                                     \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  // Correo                                                                                                                                                                                                       \n  if (extracted.correo) {                                                                                                                                                                                         \n    cleanedData.correo = extracted.correo === 'N/A' ? 'N/A' : extracted.correo.toLowerCase().trim();                                                                                                              \n  }                                                                                                                                                                                                               \n                                                                                                                                                                                                                  \n  console.log('✨ CLEANED DATA:', JSON.stringify(cleanedData));                                                                                                                                                   \n                                                                                                                                                                                                                  \n  return {                                                                                                                                                                                                        \n    phone: data.phone,                                                                                                                                                                                            \n    extracted_data: cleanedData,                                                                                                                                                                                  \n    captured_data: data.captured_data                                                                                                                                                                             \n  };"
+      },
+      "id": "56e04cf4-1c02-4ea5-aa50-6b0367219eea",
+      "name": "Clean Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        400,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Merge extracted data with existing captured_data                                                                                                                                                             \n  const data = $json;                                                                                                                                                                                             \n  const newData = data.extracted_data || {};                                                                                                                                                                      \n  const existingData = data.captured_data || {};                                                                                                                                                                  \n                                                                                                                                                                                                                  \n  // Merge: new data has priority, but don't overwrite with empty strings                                                                                                                                         \n  const mergedData = { ...existingData };                                                                                                                                                                         \n                                                                                                                                                                                                                  \n  Object.keys(newData).forEach(key => {                                                                                                                                                                           \n    if (newData[key] && String(newData[key]).trim() !== '') {                                                                                                                                                     \n      mergedData[key] = newData[key];                                                                                                                                                                             \n    }                                                                                                                                                                                                             \n  });                                                                                                                                                                                                             \n                                                                                                                                                                                                                  \n  console.log('📊 MERGE RESULT:');                                                                                                                                                                                \n  console.log('Merged data:', JSON.stringify(mergedData));                                                                                                                                                        \n                                                                                                                                                                                                                  \n  return {                                                                                                                                                                                                        \n    phone: data.phone,                                                                                                                                                                                            \n    extracted_data: newData,                                                                                                                                                                                      \n    captured_data: mergedData                                                                                                                                                                                     \n  };"
+      },
+      "id": "a391d192-ddf7-4579-8672-6149047f4073",
+      "name": "Merge Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        1616
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "e0421540-852d-44ab-a561-a1d0044375af",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        832,
+        1616
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Input": {
+      "main": [
+        [
+          {
+            "node": "Prepare Claude Messages",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Claude Messages": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Extract Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Response": {
+      "main": [
+        [
+          {
+            "node": "Detect Negations",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Negations": {
+      "main": [
+        [
+          {
+            "node": "Clean Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Data": {
+      "main": [
+        [
+          {
+            "node": "Merge Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Data": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "2efe77c8-a252-4307-b0a2-2f484c054a67",
+  "meta": {
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "L2YSto9GoI7Wg98p",
+  "tags": []
+}

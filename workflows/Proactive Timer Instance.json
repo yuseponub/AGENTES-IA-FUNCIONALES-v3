@@ -1,0 +1,891 @@
+{
+  "name": "Proactive Timer Instance",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"to\": $json.phone, \"from\": \"whatsapp\", \"type\": \"text\", \"content\": { \"text\": $json.message } } }}",
+        "options": {}
+      },
+      "id": "b2ac3b14-422b-4603-ad93-26cba8cba1a0",
+      "name": "1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1712,
+        496
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "o7MjFlWPCOrkcPYR",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/carolina",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"phone\": $json.phone, \"intent\": \"ofrecer_promos\", \"source\": \"proactive_timer\" } }}",
+        "options": {}
+      },
+      "id": "9cb55ae1-a631-42a6-8473-f5a06947af20",
+      "name": "2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2240,
+        480
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "proactive-timer-instance",
+        "options": {}
+      },
+      "id": "a594f646-467c-4a29-bc36-70544dbdbcbc",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -4320,
+        768
+      ],
+      "webhookId": "proactive-timer-instance"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  SELECT                                                                                              \n    phone,                                                                                            \n    session_id,                                                                                       \n    mode,                                                                                             \n    state,                                                                                            \n    captured_data,                                                                                    \n    contact_id,                                                                                       \n    callbell_conversation_href,                                                                       \n    EXTRACT(EPOCH FROM last_activity) * 1000 as last_activity_ms                                      \n  FROM sessions_v3                                                                                    \n  WHERE phone = '{{ $json.body.phone }}'",
+        "options": {}
+      },
+      "id": "7b901d08-b373-4752-bcef-8d7ebd398c82",
+      "name": "Query Session Initial",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -4096,
+        768
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const session = $json;\nconst state = typeof session.state === 'string' ? JSON.parse(session.state) : (session.state || {});\n\nconst isTimerActive = state._proactive_timer_active === true;\n\nconsole.log('PROACTIVE TIMER CHECK:', { phone: session.phone, isTimerActive });\n\nreturn {\n  phone: session.phone,\n  session_id: session.session_id,\n  is_timer_active: isTimerActive,\n  state: state,\n  mode: session.mode\n};"
+      },
+      "id": "7c343c6f-dfe8-4d89-b629-8a9e293aca2e",
+      "name": "Check If Timer Active",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3856,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_timer_active }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "e5ee2357-c9e8-44a3-adfb-75b2a4d9f691",
+      "name": "IF Timer Already Active",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -3632,
+        768
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "4242bc08-fd5c-4d33-aad9-36de6f76f1a7",
+      "name": "End - Already Active",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -3008,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const session = $json;\nreturn {\n  phone: session.phone,\n  session_id: session.session_id,\n  iteration: 0,\n  max_iterations: 20\n};"
+      },
+      "id": "a29edb43-0fe9-4ae6-816b-1851ade7279f",
+      "name": "Initialize Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -3216,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "amount": 2,
+        "unit": "minutes"
+      },
+      "id": "02acb8ea-baab-414f-9dcc-ea996bc4d270",
+      "name": "Wait 2 Minutes",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        -3008,
+        864
+      ],
+      "webhookId": "0552de1d-6fe1-4595-a44c-1c2f8289f8ca"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  SELECT                                                                                              \n    phone,                                                                                            \n    session_id,                                                                                       \n    mode,                                                                                             \n    state,                                                                                            \n    captured_data,                                                                                    \n    contact_id,                                                                                       \n    callbell_conversation_href,                                                                       \n    EXTRACT(EPOCH FROM last_activity) * 1000 as last_activity_ms                                      \n  FROM sessions_v3                                                                                    \n  WHERE phone = '{{ $node[\"Query Session Initial\"].json.phone }}'",
+        "options": {}
+      },
+      "id": "eb5ba1be-a8e1-42f3-b28c-9c3448bda1de",
+      "name": "Query Session State",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -2784,
+        864
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const session = $json;\nlet prevIteration = 0;\ntry { prevIteration = $node['Initialize Loop'].json.iteration || 0; } catch(e) {}\ntry { prevIteration = $node['Continue Loop'].json.iteration || prevIteration; } catch(e) {}\n\nconst state = typeof session.state === 'string' ? JSON.parse(session.state) : (session.state || {});\nconst mode = session.mode;\nconst now = new Date();\n\n// Helper para parsear timestamps de PostgreSQL\nfunction parsePgTimestamp(ts) {\n  if (!ts) return null;\n  // Reemplazar espacio, truncar microsegundos a ms, cambiar +00 a Z\n  let fixed = ts.replace(' ', 'T');\n  fixed = fixed.replace(/\\.(\\d{3})\\d*/, '.$1');\n  fixed = fixed.replace('+00', 'Z');\n  return new Date(fixed);\n}\n\nconst proactiveStartedAt = parsePgTimestamp(state._proactive_started_at) || now;\nconst firstDataAt = parsePgTimestamp(state._first_data_at);\nconst minDataAt = parsePgTimestamp(state._min_data_at);\nconst ofrecerPromosAt = parsePgTimestamp(state._ofrecer_promos_at);\n\nconst minSinceStart = (now - proactiveStartedAt) / 60000;\nconst minSinceFirstData = firstDataAt ? (now - firstDataAt) / 60000 : 0;\nconst minSinceMinData = minDataAt ? (now - minDataAt) / 60000 : 0;\nconst minSinceOfrecerPromos = ofrecerPromosAt ? (now - ofrecerPromosAt) / 60000 : 0;\n\n// Campos personales están en state, no en captured_data\nconst minFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad'];\nconst allFields = [...minFields, 'barrio', 'departamento', 'correo'];\nconst presentMinFields = minFields.filter(f => state[f] && String(state[f]).trim() !== '');\nconst hasAnyData = presentMinFields.length > 0;\nconst hasMinData = presentMinFields.length >= 5;\nconst missingFields = allFields.filter(f => !state[f] || String(state[f]).trim() === '');\n\nconst noDataSent = state._action_no_data_sent || false;\nconst missingDataSent = state._action_missing_data_sent || false;\nconst ofrecerPromosDone = state._action_ofrecer_promos_done || false;\nconst orderCreated = state.order_created || false;\nconst lastIntent = state._last_intent || '';\nconst isOfrecerPromos = lastIntent === 'ofrecer_promos' || lastIntent.includes('resumen_');\n\n// Usando epoch ms para evitar problemas de timezone\nconst lastActivity = new Date(Number(session.last_activity_ms));\nconst minSinceActivity = (now - lastActivity) / 60000;\n\n// PRODUCCION: 2 minutos sin respuesta = cliente no respondió\nconst clientResponded = minSinceActivity < 2;\n\nlet action = 'none';\nlet updates = {};\n\nif (clientResponded) {\n  action = 'wait';\n} else if (isOfrecerPromos && !orderCreated) {\n  // Instance 4: Crear orden automáticamente\n  if (!ofrecerPromosAt) {\n    updates._ofrecer_promos_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceOfrecerPromos >= 10) {  // 10 min desde ofrecer promos\n    action = 'create_order';\n    updates.order_created = true;\n    updates.order_created_at = now.toISOString();\n  }\n} else if (hasMinData && !ofrecerPromosDone && !isOfrecerPromos) {\n  // Instance 3: Ofrecer promociones\n  if (!minDataAt) {\n    updates._min_data_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceMinData >= 2) {  // 2 min desde datos mínimos completos\n    action = 'ofrecer_promos';\n    updates._action_ofrecer_promos_done = true;\n    updates._last_intent = 'ofrecer_promos';\n  }\n} else if (hasAnyData && !hasMinData && !missingDataSent) {\n  // Instance 2: Pedir datos faltantes\n  if (!firstDataAt) {\n    updates._first_data_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceFirstData >= 6) {  // 6 min desde primer dato\n    action = 'request_missing_data';\n    updates._action_missing_data_sent = true;\n  }\n} else if (!hasAnyData && !noDataSent && minSinceStart >= 10) {  // 10 min sin datos\n  // Instance 1: Recordatorio sin datos\n  action = 'reminder_no_data';\n  updates._action_no_data_sent = true;\n}\n\nconst iteration = prevIteration + 1;\n\n// Acciones que terminan el workflow (esperan respuesta o son finales)\nconst endAfterActions = ['reminder_no_data', 'request_missing_data', 'create_order'];\n\nconst shouldContinue = !orderCreated &&\n  mode !== 'completed' &&\n  mode !== 'human_takeover' &&\n  iteration < 20 &&\n  minSinceStart < 30 &&\n  !endAfterActions.includes(action);\n\nconsole.log('DEBUG:', {\n  now: now.toISOString(),\n  proactiveStartedAt: proactiveStartedAt.toISOString(),\n  minSinceStart: minSinceStart.toFixed(2),\n  minSinceActivity: minSinceActivity.toFixed(2),\n  hasAnyData: hasAnyData,\n  noDataSent: noDataSent,\n  clientResponded: clientResponded,\n  action: action\n});\n\nreturn {\n  phone: session.phone,\n  session_id: session.session_id,\n  action: action,\n  updates: updates,\n  should_continue: shouldContinue,\n  iteration: iteration,\n  state: state,\n  present_fields: presentMinFields,\n  missing_fields: missingFields,\n  _debug: {\n    now: now.toISOString(),\n    proactiveStartedAt: proactiveStartedAt.toISOString(),\n    minSinceStart: minSinceStart.toFixed(2),\n    minSinceActivity: minSinceActivity.toFixed(2),\n    hasAnyData: hasAnyData,\n    hasMinData: hasMinData,\n    presentCount: presentMinFields.length,\n    noDataSent: noDataSent,\n    missingDataSent: missingDataSent,\n    clientResponded: clientResponded\n  }\n};\n"
+      },
+      "id": "fe36cdd5-fe97-4885-86d3-9288f46af574",
+      "name": "Analyze State",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "reminder_no_data"
+            }
+          ]
+        }
+      },
+      "id": "460f4c90-5b25-4b5c-ade4-b5477c669ab3",
+      "name": "IF Reminder No Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2336,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"to\": $json.phone, \"from\": \"whatsapp\", \"type\": \"text\", \"content\": { \"text\": \"Quedamos pendientes a tus datos, o si tienes alguna pregunta acerca del producto no dudes en hacerla\" } } }}",
+        "options": {}
+      },
+      "id": "ea5364ba-e190-4490-83aa-40f0f9936d6c",
+      "name": "Send Reminder No Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -2128,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "request_missing_data"
+            }
+          ]
+        }
+      },
+      "id": "cbf5867c-40c9-4626-acfe-5ec53c7abce2",
+      "name": "IF Request Missing Data",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -2128,
+        1056
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst missingFields = data.missing_fields || [];\nconst fieldNames = {\n  'nombre': 'nombre',\n  'apellido': 'apellido',\n  'telefono': 'telefono',\n  'direccion': 'direccion completa',\n  'barrio': 'barrio',\n  'ciudad': 'ciudad o municipio',\n  'departamento': 'departamento',\n  'correo': 'correo electronico'\n};\n\nlet message = 'Para poder despachar tu producto nos faltaria:\\n';\nmissingFields.forEach((field) => {\n  message += '- ' + (fieldNames[field] || field) + '\\n';\n});\nmessage += '\\nQuedamos pendientes🤗';\n\nreturn {\n  phone: data.phone,\n  message: message,\n  updates: data.updates,\n  should_continue: data.should_continue,\n  iteration: data.iteration,\n  state: data.state\n};\n"
+      },
+      "id": "bb532493-6d7a-4be0-b4b0-d93fd6f382fc",
+      "name": "Prepare Missing Data Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1936,
+        896
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "ofrecer_promos"
+            }
+          ]
+        }
+      },
+      "id": "0f44ad51-dd4a-4f6d-ba44-995f15b15f6d",
+      "name": "IF Ofrecer Promos",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1824,
+        1168
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "create_order"
+            }
+          ]
+        }
+      },
+      "id": "a54ef6d9-d4c5-4832-8625-67ed9505094e",
+      "name": "IF Create Order",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1488,
+        1216
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/order-manager",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"phone\": $json.phone, \"captured_data\": $json.state, \"promo_override\": \"WPP\", \"source\": \"proactive_timer\", \"contact_id\": $node[\"Query Session Initial\"].json.contact_id || \"\", \"callbell_conversation_href\": $node[\"Query Session Initial\"].json.callbell_conversation_href || \"\" } }}",
+        "options": {}
+      },
+      "id": "5244b4cf-0569-4164-9ca2-2340d61ce686",
+      "name": "Call Order Manager",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1296,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE sessions_v3                                                                                  \n  SET state = state || '{{ JSON.stringify($node[\"Analyze State\"].json.updates) || \"{}\" }}'::jsonb     \n  WHERE phone = '{{ $node[\"Query Session Initial\"].json.phone }}'",
+        "options": {}
+      },
+      "id": "5815a8f2-b04e-416e-9b21-bbf8f19aa1df",
+      "name": "Update Timestamps",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -960,
+        672
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $node['Analyze State'].json.should_continue }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "7dced21e-3c04-4012-ae69-30d1468c6c04",
+      "name": "IF Should Continue",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -640,
+        656
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return { phone: $json.phone, session_id: $json.session_id, iteration: $json.iteration || 0 };"
+      },
+      "id": "6d5bc16f-ff7c-475d-9598-93fe728aabbe",
+      "name": "Continue Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -256,
+        1472
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE sessions_v3 SET state = state || '{\"_proactive_timer_active\": false}'::jsonb WHERE phone = '{{ $json.phone }}'",
+        "options": {}
+      },
+      "id": "68ea3832-4e4d-4159-bee5-db7072c26b6b",
+      "name": "Mark Timer Inactive",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -336,
+        720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "d7311861-5737-487e-ab43-e03423d86cdb",
+      "name": "End - Complete",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        16,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "  UPDATE sessions_v3                                                                                                                                                                                                                             \n  SET state = COALESCE(state, '{}'::jsonb) || jsonb_build_object(                                                                                                                                                                                \n    '_proactive_timer_active', true,                                                                                                                                                                                                             \n    '_proactive_started_at', COALESCE(state->>'_proactive_started_at', NOW()::text)                                                                                                                                                              \n  )                                                                                                                                                                                                                                              \n  WHERE phone = '{{ $json.phone }}'                                                                                                                                                                                                              \n  RETURNING *",
+        "options": {}
+      },
+      "id": "4b4eb40c-30eb-4621-85a6-3852bce36408",
+      "name": "Mark Timer Active PRUEBAS",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [
+        -3392,
+        864
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "RLI7fn3fTdDTnEPF",
+          "name": "Postgres Historial v3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const session = $json;\nlet prevIteration = 0;\ntry { prevIteration = $node['Initialize Loop'].json.iteration || 0; } catch(e) {}\ntry { prevIteration = $node['Continue Loop'].json.iteration || prevIteration; } catch(e) {}\n\nconst state = typeof session.state === 'string' ? JSON.parse(session.state) : (session.state || {});\nconst mode = session.mode;\nconst now = new Date();\n\nconst proactiveStartedAt = state._proactive_started_at ? new Date(state._proactive_started_at) : now;\nconst firstDataAt = state._first_data_at ? new Date(state._first_data_at) : null;\nconst minDataAt = state._min_data_at ? new Date(state._min_data_at) : null;\nconst ofrecerPromosAt = state._ofrecer_promos_at ? new Date(state._ofrecer_promos_at) : null;\n\nconst minSinceStart = (now - proactiveStartedAt) / 60000;\nconst minSinceFirstData = firstDataAt ? (now - firstDataAt) / 60000 : 0;\nconst minSinceMinData = minDataAt ? (now - minDataAt) / 60000 : 0;\nconst minSinceOfrecerPromos = ofrecerPromosAt ? (now - ofrecerPromosAt) / 60000 : 0;\n\nconst minFields = ['nombre', 'apellido', 'telefono', 'direccion', 'ciudad'];\nconst allFields = [...minFields, 'barrio', 'departamento', 'correo'];\nconst presentMinFields = minFields.filter(f => state[f] && String(state[f]).trim() !== '');\nconst hasAnyData = presentMinFields.length > 0;\nconst hasMinData = presentMinFields.length >= 5;\nconst missingFields = allFields.filter(f => !state[f] || String(state[f]).trim() === '');\n\nconst noDataSent = state._action_no_data_sent || false;\nconst missingDataSent = state._action_missing_data_sent || false;\nconst ofrecerPromosDone = state._action_ofrecer_promos_done || false;\nconst orderCreated = state.order_created || false;\nconst lastIntent = state._last_intent || '';\nconst isOfrecerPromos = lastIntent === 'ofrecer_promos' || lastIntent.includes('resumen_');\n\nconst lastActivity = new Date(session.last_activity);\nconst minSinceActivity = (now - lastActivity) / 60000;\nconst clientResponded = minSinceActivity < 2;\n\nlet action = 'none';\nlet updates = {};\n\nif (clientResponded) {\n  action = 'wait';\n} else if (isOfrecerPromos && !orderCreated) {\n  if (!ofrecerPromosAt) {\n    updates._ofrecer_promos_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceOfrecerPromos >= 10) {\n    action = 'create_order';\n    updates.order_created = true;\n  }\n} else if (hasMinData && !ofrecerPromosDone && !isOfrecerPromos) {\n  if (!minDataAt) {\n    updates._min_data_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceMinData >= 2) {\n    action = 'ofrecer_promos';\n    updates._action_ofrecer_promos_done = true;\n  }\n} else if (hasAnyData && !hasMinData && !missingDataSent) {\n  if (!firstDataAt) {\n    updates._first_data_at = now.toISOString();\n    action = 'mark_time';\n  } else if (minSinceFirstData >= 6) {\n    action = 'request_missing_data';\n    updates._action_missing_data_sent = true;\n  }\n} else if (!hasAnyData && !noDataSent && minSinceStart >= 10) {\n  action = 'reminder_no_data';\n  updates._action_no_data_sent = true;\n}\n\nconst iteration = prevIteration + 1;\nconst shouldContinue = !orderCreated && mode !== 'completed' && mode !== 'human_takeover' && iteration < 20 && minSinceStart < 30;\n\nconsole.log('ACTION:', action, '| Continue:', shouldContinue, '| Iter:', iteration);\n\nreturn {\n  phone: session.phone,\n  session_id: session.session_id,\n  action: action,\n  updates: updates,\n  should_continue: shouldContinue,\n  iteration: iteration,\n  state: state,\n  missing_fields: missingFields\n};"
+      },
+      "id": "08659451-8420-486a-b3c0-edf2741ff9da",
+      "name": "Analyze State ORIGINAL",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2560,
+        672
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"to\": $json.phone, \"from\": \"whatsapp\", \"type\": \"text\", \"content\": { \"text\": $json.message } } }}",
+        "options": {}
+      },
+      "id": "89498946-007e-40f4-9a6b-274c73508009",
+      "name": "Send Request Missing Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1680,
+        864
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.callbell_body) }}",
+        "options": {}
+      },
+      "id": "43d4c560-7331-45f0-bb84-8db75fb65abe",
+      "name": "Call Carolina - Ofrecer Promos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1456,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  const data = $json;                                                                                 \n  const phone = data.phone;                                                                           \n                                                                                                      \n  const templateUuid = '06cf7d5b74c9430493c30f4ae799603a';                                            \n  const imageUrl = 'https://static.callbell.eu/uploads/conversation_attachment/url/179486109/WhatsApp_\n  Image_2025-12-30_at_12.59.10_AM.jpeg';                                                              \n                                                                                                      \n  return {                                                                                            \n    phone: phone,                                                                                     \n    updates: data.updates,                                                                            \n    should_continue: data.should_continue,                                                            \n    iteration: data.iteration,                                                                        \n    state: data.state,                                                                                \n    callbell_body: {                                                                                  \n      to: phone,                                                                                      \n      from: 'whatsapp',                                                                               \n      type: 'image',                                                                                  \n      content: {                                                                                      \n        url: imageUrl                                                                                 \n      },                                                                                              \n      template_uuid: templateUuid,                                                                    \n      optin_contact: true                                                                             \n    }                                                                                                 \n  };"
+      },
+      "id": "3dd2da80-21d2-453b-a576-6b56b79bde94",
+      "name": "format ofrecer promos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1648,
+        1088
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.callbell.eu/v1/messages/send",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer kHMm1U4zCkpyYunbFr4eyzzArLs7k9DG.567dec89ec63000252a4ab2a60c3198591f5f780a721c65a82281dd99e4a627a"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { \"to\": $json.phone, \"from\": \"whatsapp\", \"type\": \"text\", \"content\": { \"text\": \"Quedamos pendientes a la promocion que desees para poder despachar tu compra🤗\" } } }}",
+        "options": {}
+      },
+      "id": "197c1ad6-bf3a-4efc-a88d-f406c06885b0",
+      "name": "confirma promo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1120,
+        944
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "1": {
+      "main": [
+        []
+      ]
+    },
+    "2": {
+      "main": [
+        []
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Query Session Initial",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Session Initial": {
+      "main": [
+        [
+          {
+            "node": "Check If Timer Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check If Timer Active": {
+      "main": [
+        [
+          {
+            "node": "IF Timer Already Active",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Timer Already Active": {
+      "main": [
+        [
+          {
+            "node": "End - Already Active",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Timer Active PRUEBAS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Initialize Loop": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 2 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Query Session State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Session State": {
+      "main": [
+        [
+          {
+            "node": "Analyze State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze State": {
+      "main": [
+        [
+          {
+            "node": "IF Reminder No Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Reminder No Data": {
+      "main": [
+        [
+          {
+            "node": "Send Reminder No Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Request Missing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Reminder No Data": {
+      "main": [
+        [
+          {
+            "node": "Update Timestamps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Request Missing Data": {
+      "main": [
+        [
+          {
+            "node": "Prepare Missing Data Message",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Ofrecer Promos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Missing Data Message": {
+      "main": [
+        [
+          {
+            "node": "Send Request Missing Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Ofrecer Promos": {
+      "main": [
+        [
+          {
+            "node": "format ofrecer promos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "IF Create Order",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Create Order": {
+      "main": [
+        [
+          {
+            "node": "Call Order Manager",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update Timestamps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Order Manager": {
+      "main": [
+        [
+          {
+            "node": "confirma promo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Timestamps": {
+      "main": [
+        [
+          {
+            "node": "IF Should Continue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Should Continue": {
+      "main": [
+        [
+          {
+            "node": "Continue Loop",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Timer Inactive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Loop": {
+      "main": [
+        [
+          {
+            "node": "Wait 2 Minutes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Timer Inactive": {
+      "main": [
+        [
+          {
+            "node": "End - Complete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Timer Active PRUEBAS": {
+      "main": [
+        [
+          {
+            "node": "Initialize Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Request Missing Data": {
+      "main": [
+        [
+          {
+            "node": "Update Timestamps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Carolina - Ofrecer Promos": {
+      "main": [
+        [
+          {
+            "node": "Update Timestamps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "format ofrecer promos": {
+      "main": [
+        [
+          {
+            "node": "Call Carolina - Ofrecer Promos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "confirma promo": {
+      "main": [
+        [
+          {
+            "node": "Update Timestamps",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "8124f759-c4f3-4729-9019-9862d545e6a6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "ZxcjHwnBkMGb0fCL",
+  "tags": []
+}
