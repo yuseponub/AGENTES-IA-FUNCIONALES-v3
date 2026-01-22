@@ -1,0 +1,1790 @@
+{
+  "name": "Slack Sin Ordenes Inter Import",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            },
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:ROBOT COORD)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "3778d146-01ca-4587-a1af-5f377161f3a1",
+      "name": "Bigin: Obtener Órdenes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -448,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-orders-exist",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "66c07e70-aa60-43ae-aa3d-9f18c67e0836",
+      "name": "¿Hay Órdenes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -128,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "⚠️ No hay órdenes en el stage *ROBOT COORD*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "5f025f20-ec88-4657-94ab-c986599992ea",
+      "name": "Slack: Sin Órdenes",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        160,
+        224
+      ],
+      "webhookId": "28c9c4be-e965-481e-be56-a4bed650dd4d",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "trigger": [
+          "message"
+        ],
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "27d96e08-80a4-4ed4-978e-37739e6a320c",
+      "name": "Slack Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [
+        -2016,
+        800
+      ],
+      "webhookId": "coordinadora-bot-trigger",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Procesa órdenes de Bigin para Coordinadora. Devuelve SOLO un JSON array.\\n\\nMAPEO DEPARTAMENTOS→ABREVIATURAS:\\nAmazonas=AMAZ, Antioquia=ANT, Arauca=ARAU, Atlántico=ATL, Bolívar=BOL, Boyacá=BOY, Caldas=CDAS, Caquetá=CAQ, Casanare=C/NARE, Cauca=CAU, Cesar=CES, Chocó=CHOCO, Córdoba=CORD, Cundinamarca=C/MARCA, Guainía=GUAI, Guaviare=G/VIARE, Guajira=GUAJ, Huila=HLA, Magdalena=MG/LENA, Meta=META, Nariño=NAR, Norte de Santander=N/STDER, Putumayo=P/MAYO, Quindío=QDIO, Risaralda=RS, San Andrés=S/ANDRES, Santander=STDER, Sucre=SUCRE, Tolima=TOL, Valle del Cauca=VALLE, Valle=VALLE, Vaupés=V/PES, Vichada=VICH\\n\\nREGLAS EXACTAS:\\n\\n1. identificacion: Usar campo Telefono. Quitar '57' del inicio si existe. Quitar espacios, guiones, paréntesis, '+'. Resultado DEBE tener 10 dígitos exactos.\\n   Ej: '+ 57 316 3709528' → '3163709528'\\n   Ej: '573163709528' → '3163709528'\\n\\n2. nombres: Primera palabra del campo Deal_Name.\\n   Ej: 'Juan Perez Garcia' → 'Juan'\\n\\n3. apellidos: Resto de palabras del Deal_Name. Si solo hay una palabra, usar 'Cliente'.\\n   Ej: 'Juan Perez Garcia' → 'Perez Garcia'\\n   Ej: 'Maria' → 'Cliente'\\n\\n4. direccion: Campo Direcci_n exactamente como está.\\n\\n5. ciudad: CRÍTICO - Formato exacto: 'MUNICIPIO (ABREV)'\\n   - Tomar Municipio_Dept, convertir a MAYÚSCULAS\\n   - Buscar Departamento en el mapeo y usar su abreviatura\\n   - Ej: Municipio_Dept='bucaramanga', Departamento='santander' → 'BUCARAMANGA (STDER)'\\n   - Ej: Municipio_Dept='Bogota', Departamento='Cundinamarca' → 'BOGOTA (C/MARCA)'\\n   - Ej: Municipio_Dept='Envigado', Departamento='Antioquia' → 'ENVIGADO (ANT)'\\n\\n6. departamento: Campo Departamento original (para referencia).\\n\\n7. celular: Igual que identificacion - 10 dígitos sin 57, sin espacios.\\n\\n8. email: Campo email si existe, sino null.\\n\\n9. referencia: SIEMPRE 'AA1'\\n\\n10. unidades:\\n    - Si Amount = 77900 → 1\\n    - Si Amount = 109900 → 2\\n    - Si Amount = 139900 → 3\\n    - Si es OTRO valor → buscar en Description el patrón '(X unidad)' o '(X unidades)' y extraer X\\n\\n11. totalIva: SIEMPRE 0\\n\\n12. totalConIva: Valor exacto del campo Amount (77900, 109900, 139900, u otro)\\n\\n13. valorDeclarado: SIEMPRE 55000 (sin importar el valor real)\\n\\n14. esRecaudoContraentrega: MUY IMPORTANTE\\n    - false si Deal_Name contiene '&' (significa que ya pagó)\\n    - false si Tag contiene 'PAGO ANTICIPADO'\\n    - true en CUALQUIER otro caso (se debe cobrar)\\n\\n15. peso: SIEMPRE 0.08\\n\\n16. alto: SIEMPRE 5\\n\\n17. largo: SIEMPRE 5\\n\\n18. ancho: SIEMPRE 10\\n\\n19. biginOrderId: Campo 'id' de la orden\\n\\n20. biginOrderName: Campo 'Deal_Name'\\n\\nFormato salida (JSON array):\\n[{\\\"identificacion\\\":\\\"3163709528\\\",\\\"nombres\\\":\\\"Juan\\\",\\\"apellidos\\\":\\\"Perez\\\",\\\"direccion\\\":\\\"Calle 123\\\",\\\"ciudad\\\":\\\"BUCARAMANGA (STDER)\\\",\\\"departamento\\\":\\\"Santander\\\",\\\"celular\\\":\\\"3163709528\\\",\\\"email\\\":null,\\\"referencia\\\":\\\"AA1\\\",\\\"unidades\\\":1,\\\"totalIva\\\":0,\\\"totalConIva\\\":77900,\\\"valorDeclarado\\\":55000,\\\"esRecaudoContraentrega\\\":true,\\\"peso\\\":0.08,\\\"alto\\\":5,\\\"largo\\\":5,\\\"ancho\\\":10,\\\"biginOrderId\\\":\\\"123\\\",\\\"biginOrderName\\\":\\\"Juan Perez\\\"}]\\n\\nÓrdenes a procesar:\\n\" + JSON.stringify($json.data)\n    }\n  ]\n}\n}}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "c8d6151a-dc55-4969-b946-84195a1cfc65",
+      "name": "Call Claude API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        320,
+        0
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "a60NiYpV50szsxWN",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "54a28bbd-64a4-43ae-a10f-8533dbc9a3b7",
+      "name": "🔄 Refresh Bigin Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -672,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Validar ciudades con el servidor                                                                                                                                                                                                            \n  const pedidos = $input.all().map(item => item.json);                                                                                                                                                                                           \n                                                                                                                                                                                                                                                 \n  const response = await this.helpers.httpRequest({                                                                                                                                                                                              \n    method: 'POST',                                                                                                                                                                                                                              \n    url: 'http://172.18.0.1:3001/api/validar-pedidos',                                                                                                                                                                                           \n    body: { pedidos },                                                                                                                                                                                                                           \n    json: true                                                                                                                                                                                                                                   \n  });                                                                                                                                                                                                                                            \n                                                                                                                                                                                                                                                 \n  // Retornar pedidos con info de validación                                                                                                                                                                                                     \n  return response.pedidos.map(pedido => {                                                                                                                                                                                                        \n    const { _index, ...datos } = pedido;                                                                                                                                                                                                         \n    return { json: datos };                                                                                                                                                                                                                      \n  });"
+      },
+      "id": "5359d242-4df3-40cb-96d3-54c62c4c92f4",
+      "name": "Validar Ciudades",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-valido",
+              "leftValue": "={{ $json._valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "7e7c68eb-7458-48a6-bf0c-478000a5a863",
+      "name": "¿Ciudad Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        960,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:3001/api/crear-pedidos-batch",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 1000000
+        }
+      },
+      "id": "469d0334-05bb-4d97-a61f-6cc3fe587a40",
+      "name": "Robot: Crear Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1504,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de Claude\nconst response = $input.first().json;\nlet pedidos = [];\n\ntry {\n  const content = response.content?.[0]?.text || response.message?.content || response.content || response.text;\n  const jsonMatch = content.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    pedidos = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  console.error('Error parseando respuesta:', e);\n}\n\nreturn pedidos.map(p => ({ json: p }));"
+      },
+      "id": "2e4dc7eb-8616-4f04-84f9-6c3653def2fa",
+      "name": "Parsear Respuesta Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $('Combinar Mensajes').first().json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "4cd9f87e-f6b0-4407-9c95-b41a99807285",
+      "name": "Slack: Enviar Resultado",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2848,
+        0
+      ],
+      "webhookId": "cf16b2d0-7f1b-47e2-bfd9-9bbfeb1d5e13",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "8dc1065e-28ee-4b46-b999-ea119e99dda9",
+      "name": "Unir Resultados1",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [
+        2496,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar todos los mensajes\nconst items = $input.all();\nlet mensajeFinal = '';\n\nfor (const item of items) {\n  if (item.json.mensaje) {\n    mensajeFinal += item.json.mensaje + '\\n';\n  }\n}\n\nmensajeFinal = mensajeFinal.trim() || '⚠️ No se procesaron pedidos';\n\nreturn [{ json: { mensaje: mensajeFinal } }];"
+      },
+      "id": "8c8516f0-771b-43b6-952b-f4d551fb2cf2",
+      "name": "Combinar Mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar mensaje de error con datos completos\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { mensaje: '', cantidad: 0 } }];\n}\n\nconst errores = items.map(item => {\n  const p = item.json;\n  return `• *${p.nombres} ${p.apellidos}*\n   📍 ${p.direccion}\n   🏙️ ${p.ciudad}\n   📱 ${p.celular}\n   💰 $${p.totalConIva?.toLocaleString() || 'N/A'}\n   ❌ ${p._error}`;\n}).join('\\n\\n');\n\nreturn [{\n  json: {\n    mensaje: `❌ *Pedidos rechazados:*\\n\\n${errores}`,\n    cantidad: items.length\n  }\n}];"
+      },
+      "id": "50b0e56f-f80e-4ca2-9387-f2e650175fc2",
+      "name": "Error: Ciudad Inválida1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar Resumen - CORREGIDO para batch endpoint\nconst response = $input.first().json;\nconst resultados = response.resultados || [];\n\n// Obtener datos originales del nodo anterior\nconst datosOriginales = $('¿Ciudad Válida?').all();\n\nconst exitosos = [];\nconst fallidos = [];\n\nresultados.forEach((robot) => {\n  // Buscar datos originales por biginOrderId\n  const original = datosOriginales.find(d => d.json.biginOrderId === robot.biginOrderId)?.json || {};\n\n  if (robot.success) {\n    exitosos.push({ ...original, ...robot });\n  } else {\n    fallidos.push({ ...original, ...robot });\n  }\n});\n\nlet mensaje = '';\n\nif (exitosos.length > 0) {\n  const detalles = exitosos.map(p => {\n    const total = p.totalConIva ? `$${p.totalConIva.toLocaleString('es-CO')}` : 'N/A';\n    return `• *#${p.numeroPedido}* - ${p.nombres || 'N/A'} ${p.apellidos || ''}\n   📍 ${p.direccion || 'N/A'}\n   🏙️ ${p.ciudad || 'N/A'}\n   📱 ${p.celular || 'N/A'}\n   💰 ${total}`;\n  }).join('\\n\\n');\n  mensaje += `✅ *${exitosos.length} pedido(s) creado(s):*\\n\\n${detalles}`;\n}\n\nif (fallidos.length > 0) {\n  const errores = fallidos.map(p => {\n    return `• *${p.nombres || p.biginOrderName || 'N/A'} ${p.apellidos || ''}*\n   📱 ${p.celular || 'N/A'}\n   ❌ ${p.error || 'Error desconocido'}`;\n  }).join('\\n\\n');\n  mensaje += `\\n\\n❌ *${fallidos.length} error(es) del robot:*\\n\\n${errores}`;\n}\n\nreturn [{\n  json: {\n    mensaje,\n    exitosos: exitosos.length,\n    fallidos: fallidos.length,\n    pedidosExitosos: exitosos,\n    pedidosFallidos: fallidos\n  }\n}];\n"
+      },
+      "id": "b21a0b05-4e07-4d03-b6ac-3264a60f31a7",
+      "name": "Generar Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1696,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "368c26cc-2139-479c-9477-18cf751175e7",
+      "name": "🔄 Refresh Bigin Token2",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -672,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-orders-inter",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "616e3b1f-062a-47d2-b8ba-74f205919c92",
+      "name": "¿Hay Órdenes Inter?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Extrae datos de órdenes de Bigin para generar guías de Interrapidísimo. Devuelve SOLO un JSON array.\\n\\nCAMPOS A EXTRAER:\\n\\n1. nombres: Primera palabra del campo Deal_Name\\n2. apellidos: Resto de palabras del Deal_Name. Si solo hay una palabra, usar vacío.\\n3. direccion: Campo Direcci_n exactamente como está\\n4. barrio: Extraer el barrio de la dirección si está mencionado, sino usar el campo Barrio si existe, sino vacío\\n5. ciudad: Campo Municipio_Dept en MAYÚSCULAS (solo el municipio, sin departamento)\\n6. celular: Campo Telefono. Quitar '57' del inicio, espacios, guiones. Debe tener 10 dígitos.\\n7. totalConIva: Campo Amount (valor numérico)\\n\\nFormato de salida (JSON array):\\n[{\\\"nombres\\\":\\\"Juan\\\",\\\"apellidos\\\":\\\"Perez Garcia\\\",\\\"direccion\\\":\\\"Calle 123 #45-67\\\",\\\"barrio\\\":\\\"Centro\\\",\\\"ciudad\\\":\\\"BOGOTA\\\",\\\"celular\\\":\\\"3163709528\\\",\\\"totalConIva\\\":77900}]\\n\\nÓrdenes a procesar:\\n\" + JSON.stringify($json.data)\n    }\n  ]\n}\n}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "fe03539e-80da-4670-b4b9-85acf438ae40",
+      "name": "Claude: Procesar Inter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        96,
+        608
+      ],
+      "credentials": {
+        "anthropicApi": {
+          "id": "a60NiYpV50szsxWN",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de Claude para Inter\nconst response = $input.first().json;\nlet pedidos = [];\n\ntry {\n  const content = response.content?.[0]?.text || response.message?.content || response.content || response.text;\n  const jsonMatch = content.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    pedidos = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  console.error('Error parseando respuesta:', e);\n}\n\n// Retornar como un solo item con array de pedidos para el endpoint\nreturn [{ json: { pedidos } }];"
+      },
+      "id": "b3341542-344e-4a69-9cb4-4bf1b817c792",
+      "name": "Parsear Claude Inter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        320,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/api/generar-guias",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "4176a5f4-5a6f-4feb-94e0-8ae954ec7be3",
+      "name": "Generar Guías PDF",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        528,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatear respuesta para Slack\nconst response = $input.first().json;\n\nif (!response.success) {\n  return [{\n    json: {\n      mensaje: `❌ *Error generando guías:* ${response.error || 'Error desconocido'}`\n    }\n  }];\n}\n\nconst guiasInfo = response.guias?.map((g, i) =>\n  `   ${g.numero}. ${g.nombre} - ${g.ciudad}`\n).join('\\n') || '';\n\nconst downloadUrl = response.downloadUrl;\nconst biginMsg = response.biginActualizado ? `\\n\\n📋 *${response.mensajeBigin}*` : '';\n\nconst mensaje = `✅ *${response.total} guía(s) generada(s) para Interrapidísimo*\\n\\n${guiasInfo}\\n\\n📥 *Descargar PDF:* ${downloadUrl}${biginMsg}`;\n\nreturn [{ json: { mensaje, downloadUrl, total: response.total } }];\n"
+      },
+      "id": "4286dc27-aa3a-4df4-944b-e34f0df2c7ca",
+      "name": "Formato Slack Inter",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1168,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "3de642b4-2a6c-4947-9eef-032742e5dc7b",
+      "name": "Slack: Resultado Inter",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1360,
+        608
+      ],
+      "webhookId": "09f725a1-69ad-40d4-b9b5-197517a6a3fa",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "⚠️ No hay órdenes en el stage *ROBOT INTER*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "265915e1-674d-4efc-8074-2bcd17ea6256",
+      "name": "Slack: Sin Órdenes Inter",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        112,
+        768
+      ],
+      "webhookId": "ef46bd5f-e5b3-45a5-9f4c-16848a5551e9",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "🔄 Refresh Bigin Token Bogota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -624,
+        960
+      ],
+      "id": "62952a8f-f5a5-480e-b239-3a13ad754b11"
+    },
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:ROBOT BOGOTA)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Bigin: Órdenes Bogota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        960
+      ],
+      "id": "80964bfc-7c33-416e-8a3b-06f19408652b"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-orders-bogota",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Hay Órdenes Bogota?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        960
+      ],
+      "id": "e6bbfd52-6064-42a0-a2e1-4f70a040537a"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "anthropicApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "anthropic-version",
+              "value": "2023-06-01"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{\n{\n  \"model\": \"claude-sonnet-4-20250514\",\n  \"max_tokens\": 4096,\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": \"Extrae datos de órdenes de Bigin para generar guías de Bogotá. Devuelve SOLO un JSON array.\\n\\nCAMPOS A EXTRAER:\\n\\n1. nombres: Primera palabra del campo Deal_Name\\n2. apellidos: Resto de palabras del Deal_Name. Si solo hay una palabra, usar vacío.\\n3. direccion: Campo Direcci_n exactamente como está\\n4. barrio: Extraer el barrio de la dirección si está mencionado, sino usar el campo Barrio si existe, sino vacío\\n5. ciudad: Campo Municipio_Dept en MAYÚSCULAS (solo el municipio, sin departamento)\\n6. celular: Campo Telefono. Quitar '57' del inicio, espacios, guiones. Debe tener 10 dígitos.\\n7. totalConIva: Campo Amount (valor numérico)\\n\\nFormato de salida (JSON array):\\n[{\\\"nombres\\\":\\\"Juan\\\",\\\"apellidos\\\":\\\"Perez Garcia\\\",\\\"direccion\\\":\\\"Calle 123 #45-67\\\",\\\"barrio\\\":\\\"Centro\\\",\\\"ciudad\\\":\\\"BOGOTA\\\",\\\"celular\\\":\\\"3163709528\\\",\\\"totalConIva\\\":77900}]\\n\\nÓrdenes a procesar:\\n\" + JSON.stringify($json.data)\n    }\n  ]\n}\n}}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "name": "Claude: Procesar Bogota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        144,
+        960
+      ],
+      "id": "646d073f-008d-4a0d-86ec-494987d9617d",
+      "credentials": {
+        "anthropicApi": {
+          "id": "a60NiYpV50szsxWN",
+          "name": "Anthropic account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de Claude para Bogota\nconst response = $input.first().json;\nlet pedidos = [];\n\ntry {\n  const content = response.content?.[0]?.text || response.message?.content || response.content || response.text;\n  const jsonMatch = content.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    pedidos = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  console.error('Error parseando respuesta:', e);\n}\n\nreturn [{ json: { pedidos } }];"
+      },
+      "name": "Parsear Claude Bogota",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        960
+      ],
+      "id": "d249bfc3-e69f-4bba-98f8-d3f56f105dba"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/api/generar-guias",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "name": "Generar Guías PDF Bogota",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        576,
+        960
+      ],
+      "id": "d66b063a-4e6c-4537-b3de-7f09cc3323e5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatear respuesta para Slack\nconst response = $input.first().json;\n\nif (!response.success) {\n  return [{\n    json: {\n      mensaje: `❌ *Error generando guías:* ${response.error || 'Error desconocido'}`\n    }\n  }];\n}\n\nconst guiasInfo = response.guias?.map((g, i) =>\n  `   ${g.numero}. ${g.nombre} - ${g.ciudad}`\n).join('\\n') || '';\n\nconst downloadUrl = response.downloadUrl;\n\nconst mensaje = `✅ *${response.total} guía(s) generada(s) para Bogotá*\\n\\n${guiasInfo}\\n\\n📥 *Descargar PDF:* ${downloadUrl}`;\n\nreturn [{ json: { mensaje, downloadUrl, total: response.total } }];\n"
+      },
+      "name": "Formato Slack Bogota",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        960
+      ],
+      "id": "45f27fa3-4dae-44d9-b2a0-a04e75dea164"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Slack: Resultado Bogota",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        976,
+        960
+      ],
+      "id": "63bfcb87-bf24-4bad-8001-faf6d4ee251f",
+      "webhookId": "77363c2a-7dd9-44b4-887d-8461f1bbd5d1",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "⚠️ No hay órdenes en el stage *ROBOT BOGOTA*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Slack: Sin Órdenes Bogota",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        208,
+        1120
+      ],
+      "id": "618ef15e-de14-4f6b-88c1-86038361c2fa",
+      "webhookId": "edd89a22-b1d8-4e84-8ec7-2af0b82b0e5b",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "  // Nodo Code: Preparar Body para Coordinadora Batch                                                                                                               \n  // Poner ANTES del HTTP Request                                                                                                                                   \n                                                                                                                                                                    \n  const pedidos = $input.all().map(item => item.json);                                                                                                              \n                                                                                                                                                                    \n  return [{                                                                                                                                                         \n    json: {                                                                                                                                                         \n      pedidos: pedidos                                                                                                                                              \n    }                                                                                                                                                               \n  }];"
+      },
+      "id": "f12cd63c-d659-49fe-a693-cc666e5ef925",
+      "name": "Preparar batch COORD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1248,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actualizar Bigin - Guía y Stage (todo en uno)\n// Va después de \"Generar Resumen\", reemplaza los 2 nodos anteriores\n\nconst resumen = $input.first().json;\nconst mensajeResumen = resumen.mensaje || '';\nconst pedidosExitosos = resumen.pedidosExitosos || [];\n\nif (pedidosExitosos.length === 0) {\n  return [{ json: { success: true, mensaje: mensajeResumen + '\\n\\nℹ️ No hay pedidos para actualizar en Bigin', actualizados: 0 } }];\n}\n\n// Obtener token\nconst accessToken = $('🔄 Refresh Bigin Token').first().json.access_token;\n\n// Preparar datos para Bigin\nconst updateData = {\n  data: pedidosExitosos.map(p => ({\n    id: p.biginOrderId,\n    Guia: p.numeroPedido,\n    Stage: 'COORDINADORA',\n    Transportadora: 'COORDINADORA'\n  }))\n};\n\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'PUT',\n    url: 'https://www.zohoapis.com/bigin/v1/Deals',\n    headers: {\n      'Authorization': `Zoho-oauthtoken ${accessToken}`,\n      'Content-Type': 'application/json'\n    },\n    body: updateData,\n    json: true\n  });\n\n  const actualizados = response.data?.filter(r => r.code === 'SUCCESS').length || 0;\n\n  return [{\n    json: {\n      success: true,\n      mensaje: mensajeResumen + `\\n\\n📋 *${actualizados} orden(es) actualizada(s) en Bigin*`,\n      actualizados,\n      response\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      success: false,\n      mensaje: mensajeResumen + `\\n\\n❌ *Error actualizando Bigin:* ${error.message}`,\n      error: error.message\n    }\n  }];\n}\n"
+      },
+      "name": "Actualizar Bigin COORD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        -240
+      ],
+      "id": "90d0386c-8175-49b3-9b2e-12e34d8a1345"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actualizar Bigin - Inter (Guía, Stage, Transportadora)\n// Va después de \"Generar Guias PDF\" y antes de \"Formato Slack Inter\"\n\nconst pdfResponse = $input.first().json;\n\n// Verificar si hay guías generadas\nif (!pdfResponse.success || !pdfResponse.guias || pdfResponse.guias.length === 0) {\n  return [{ json: { ...pdfResponse, biginActualizado: false, mensajeBigin: 'No hay guías para actualizar en Bigin' } }];\n}\n\n// Obtener órdenes de Bigin del nodo anterior\nconst biginData = $('Bigin: Ordenes Inter').first().json.data || [];\n\n// Obtener token\nconst accessToken = $('🔄 Refresh Bigin Token2').first().json.access_token;\n\n// Preparar datos para Bigin - matchear por nombre (normalizado)\nconst updateData = {\n  data: biginData.map(orden => ({\n    id: orden.id,\n    Guia: pdfResponse.guias.find(g =>\n      g.nombre.toUpperCase() === orden.Deal_Name.toUpperCase()\n    )?.numero?.toString() || orden.Guia,\n    Stage: 'ESPERANDO GUIAS',\n    Transportadora: 'INTERRAPIDISIMO'\n  }))\n};\n\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'PUT',\n    url: 'https://www.zohoapis.com/bigin/v1/Deals',\n    headers: {\n      'Authorization': `Zoho-oauthtoken ${accessToken}`,\n      'Content-Type': 'application/json'\n    },\n    body: updateData,\n    json: true\n  });\n\n  const actualizados = response.data?.filter(r => r.code === 'SUCCESS').length || 0;\n\n  return [{\n    json: {\n      ...pdfResponse,\n      biginActualizado: true,\n      mensajeBigin: `${actualizados} orden(es) actualizada(s) en Bigin`,\n      biginResponse: response\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      ...pdfResponse,\n      biginActualizado: false,\n      mensajeBigin: `Error actualizando Bigin: ${error.message}`,\n      biginError: error.message\n    }\n  }];\n}\n"
+      },
+      "id": "8af6b0a1-d601-4de5-87db-089cc473e822",
+      "name": "Actualizar Bigin INTER",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:ROBOT INTER)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5bcf6ad0-6e6b-4f03-b08d-d00002a98b8c",
+      "name": "Bigin: Ordenes Inter",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -416,
+        608
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond-coord",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "subir ordenes coord",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-inter",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "generar guias inter",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-bogota",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "generar guias bogota",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "cond-envia",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "generar excel envia",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "e549a26d-648a-4001-9359-aa34b91a276d",
+      "name": "Filtrar Mensaje",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [
+        -1776,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text.toLowerCase() }}",
+                    "rightValue": "subir ordenes coord",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Coordinadora"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text.toLowerCase() }}",
+                    "rightValue": "generar guias inter",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Interrapidisimo"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text.toLowerCase() }}",
+                    "rightValue": "generar guias bogota",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Bogota"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.text.toLowerCase() }}",
+                    "rightValue": "generar excel envia",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Envia"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "441b4fa6-c087-44a4-a9a2-77a994bcb875",
+      "name": "¿Qué Robot?",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -1568,
+        768
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.18.0.1:3002/api/generar-excel-envia ",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ordenes: $json.ordenes, biginIds: $json.biginIds }) }}",
+        "options": {}
+      },
+      "name": "Robot: Generar Excel",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        368,
+        1504
+      ],
+      "id": "6532b963-26c4-408d-a897-d8f0adf192e7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "🔄 Refresh Bigin Token Envia1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -624,
+        1504
+      ],
+      "id": "828ccd0a-df3a-4f1d-9faf-87572ee17e45"
+    },
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:ROBOT ENVIA)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Bigin: Ordenes Envia1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -368,
+        1504
+      ],
+      "id": "573ed906-258f-450d-82bb-d08876215814"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-orders-envia",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "¿Hay Órdenes Envia?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        1504
+      ],
+      "id": "56fdb8cc-cfd2-4dc0-af4d-ebf2f3fbedbf"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar datos para Excel de Envía\nconst biginResponse = $input.first().json;\nconst ordenes = biginResponse.data || [];\n\nif (ordenes.length === 0) {\n  return [{ json: { _error: true, mensaje: 'No hay órdenes para procesar' } }];\n}\n\n// Guardar IDs para después\nconst biginIds = ordenes.map(o => o.id);\n\n// Formatear datos para el robot de Excel\nconst ordenesFormateadas = ordenes.map(orden => ({\n  'Valor': orden.Amount || 0,\n  'Nombre completo': orden.Deal_Name || '',\n  'Telefono': (orden.Telefono || '').replace(/\\D/g, '').replace(/^57/, ''),\n  'Direccion completa': orden.Direcci_n || '',\n  'Municipio': orden.Municipio_Dept || '',\n  'Departamento': orden.Departamento || ''\n}));\n\nreturn [{\n  json: {\n    ordenes: ordenesFormateadas,\n    biginIds: biginIds,\n    total: ordenes.length\n  }\n}];"
+      },
+      "name": "Preparar Excel Envia1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        1504
+      ],
+      "id": "390c963e-a664-45dd-a721-49060326b8a7"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Actualizar Bigin - Envía\nconst excelResponse = $input.first().json;\n\nif (!excelResponse.success) {\n  return [{\n    json: {\n      success: false,\n      mensaje: excelResponse.error || 'Error generando Excel',\n      biginActualizado: false\n    }\n  }];\n}\n\nconst biginIds = excelResponse.biginIds || [];\nconst ordenes = excelResponse.ordenes || [];\nconst downloadUrl = excelResponse.downloadUrl || '';\nconst total = excelResponse.total || ordenes.length;\n\nif (biginIds.length === 0) {\n  return [{\n    json: {\n      success: true,\n      mensaje: 'No hay órdenes para actualizar en Bigin',\n      downloadUrl,\n      total,\n      ordenes,\n      biginActualizado: false\n    }\n  }];\n}\n\n// Obtener token\nconst accessToken = $('🔄 Refresh Bigin Token Envia1').first().json.access_token;\n\n// Preparar datos para Bigin\nconst updateData = {\n  data: biginIds.map(id => ({\n    id: id,\n    Stage: 'ESPERANDO GUIAS',\n    Transportadora: 'ENVIA'\n  }))\n};\n\ntry {\n  const response = await this.helpers.httpRequest({\n    method: 'PUT',\n    url: 'https://www.zohoapis.com/bigin/v1/Deals',\n    headers: {\n      'Authorization': `Zoho-oauthtoken ${accessToken}`,\n      'Content-Type': 'application/json'\n    },\n    body: updateData,\n    json: true\n  });\n\n  const actualizados = response.data?.filter(r => r.code === 'SUCCESS').length || 0;\n\n  return [{\n    json: {\n      success: true,\n      total,\n      ordenes,\n      downloadUrl,\n      biginActualizado: true,\n      mensajeBigin: `${actualizados} orden(es) actualizada(s) en Bigin`\n    }\n  }];\n} catch (error) {\n  return [{\n    json: {\n      success: true,\n      total,\n      ordenes,\n      downloadUrl,\n      biginActualizado: false,\n      mensajeBigin: `Error actualizando Bigin: ${error.message}`\n    }\n  }];\n}"
+      },
+      "name": "Actualizar Bigin Envia1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        592,
+        1504
+      ],
+      "id": "231581dd-2622-4c80-a9f3-bded2b2ceed1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Formatear respuesta para Slack - Envía\nconst response = $input.first().json;\n\nif (!response.success) {\n  return [{\n    json: {\n      mensaje: `❌ *Error generando Excel Envía:* ${response.mensaje || 'Error desconocido'}`\n    }\n  }];\n}\n\nconst ordenesInfo = response.ordenes?.map((o, i) =>\n  `   ${i + 1}. ${o['Nombre completo']} - ${o.Municipio}`\n).join('\\n') || '';\n\nconst downloadUrl = response.downloadUrl || '';\nconst biginMsg = response.biginActualizado ? `\\n\\n📋 *${response.mensajeBigin}*` : '';\n\nconst mensaje = `✅ *${response.total} orden(es) para Envía*\\n\\n${ordenesInfo}\\n\\n📥 *Descargar Excel:* ${downloadUrl}${biginMsg}`;\n\nreturn [{ json: { mensaje, downloadUrl, total: response.total } }];"
+      },
+      "name": "Formato Slack Envia1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        816,
+        1504
+      ],
+      "id": "4da8729d-e972-4aa8-815a-09294367afae"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Slack: Resultado Envia1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        1504
+      ],
+      "id": "36494f4c-2994-4bc8-a802-4ac879d0bfac",
+      "webhookId": "3263c6c9-a2b4-45ea-be54-dd56ec458c08",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "⚠️ No hay órdenes en el stage *ROBOT ENVIA*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "name": "Slack: Sin Órdenes Envia1",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        144,
+        1664
+      ],
+      "id": "5ccbb2b9-7975-4823-9f85-01fa26b06ca7",
+      "webhookId": "94183a14-00c2-4709-b76f-43555008b2b8",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Mensaje",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Obtener Órdenes": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Órdenes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Órdenes?": {
+      "main": [
+        [
+          {
+            "node": "Call Claude API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Órdenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Claude API": {
+      "main": [
+        [
+          {
+            "node": "Parsear Respuesta Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Refresh Bigin Token": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Obtener Órdenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Ciudades": {
+      "main": [
+        [
+          {
+            "node": "¿Ciudad Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ciudad Válida?": {
+      "main": [
+        [
+          {
+            "node": "Preparar batch COORD",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Ciudad Inválida1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: Crear Pedido": {
+      "main": [
+        [
+          {
+            "node": "Generar Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Respuesta Claude": {
+      "main": [
+        [
+          {
+            "node": "Validar Ciudades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unir Resultados1": {
+      "main": [
+        [
+          {
+            "node": "Combinar Mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar Mensajes": {
+      "main": [
+        [
+          {
+            "node": "Slack: Enviar Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Ciudad Inválida1": {
+      "main": [
+        [
+          {
+            "node": "Unir Resultados1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Generar Resumen": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Bigin COORD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Refresh Bigin Token2": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Ordenes Inter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Órdenes Inter?": {
+      "main": [
+        [
+          {
+            "node": "Claude: Procesar Inter",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Órdenes Inter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Procesar Inter": {
+      "main": [
+        [
+          {
+            "node": "Parsear Claude Inter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Claude Inter": {
+      "main": [
+        [
+          {
+            "node": "Generar Guías PDF",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Guías PDF": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Bigin INTER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato Slack Inter": {
+      "main": [
+        [
+          {
+            "node": "Slack: Resultado Inter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Resultado Inter": {
+      "main": [
+        []
+      ]
+    },
+    "🔄 Refresh Bigin Token Bogota": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Órdenes Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Órdenes Bogota": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Órdenes Bogota?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Órdenes Bogota?": {
+      "main": [
+        [
+          {
+            "node": "Claude: Procesar Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Órdenes Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Procesar Bogota": {
+      "main": [
+        [
+          {
+            "node": "Parsear Claude Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Claude Bogota": {
+      "main": [
+        [
+          {
+            "node": "Generar Guías PDF Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Guías PDF Bogota": {
+      "main": [
+        [
+          {
+            "node": "Formato Slack Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato Slack Bogota": {
+      "main": [
+        [
+          {
+            "node": "Slack: Resultado Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar batch COORD": {
+      "main": [
+        [
+          {
+            "node": "Robot: Crear Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Bigin COORD": {
+      "main": [
+        [
+          {
+            "node": "Unir Resultados1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Bigin INTER": {
+      "main": [
+        [
+          {
+            "node": "Formato Slack Inter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Ordenes Inter": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Órdenes Inter?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Mensaje": {
+      "main": [
+        [
+          {
+            "node": "¿Qué Robot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Qué Robot?": {
+      "main": [
+        [
+          {
+            "node": "🔄 Refresh Bigin Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔄 Refresh Bigin Token2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔄 Refresh Bigin Token Bogota",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "🔄 Refresh Bigin Token Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: Generar Excel": {
+      "main": [
+        [
+          {
+            "node": "Actualizar Bigin Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔄 Refresh Bigin Token Envia1": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Ordenes Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Ordenes Envia1": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Órdenes Envia?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Órdenes Envia?1": {
+      "main": [
+        [
+          {
+            "node": "Preparar Excel Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Órdenes Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Excel Envia1": {
+      "main": [
+        [
+          {
+            "node": "Robot: Generar Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Actualizar Bigin Envia1": {
+      "main": [
+        [
+          {
+            "node": "Formato Slack Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Formato Slack Envia1": {
+      "main": [
+        [
+          {
+            "node": "Slack: Resultado Envia1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "78a64ad9-c3ff-4b2d-a7c9-26801556aeda",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4df0d5bdc3c11c3032ef84d3eeea517f836272ccd7fbc040b607c1bfca545db1"
+  },
+  "id": "eaG7RWwFFu1tbbEC",
+  "tags": [
+    {
+      "updatedAt": "2026-01-21T14:27:53.966Z",
+      "createdAt": "2026-01-21T14:27:53.966Z",
+      "id": "dbQzGZBtov4cN2dY",
+      "name": "Logística"
+    }
+  ]
+}
