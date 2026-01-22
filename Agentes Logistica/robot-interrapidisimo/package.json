@@ -1,0 +1,24 @@
+{
+  "name": "interrapidisimo-bot",
+  "version": "1.0.0",
+  "description": "Generador de guías para Interrapidísimo desde Bigin",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "generate": "tsx src/generate-guides.ts",
+    "test": "tsx src/test-guide.ts"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pdfkit": "^0.15.0",
+    "cors": "^2.8.5",
+    "exceljs": "^4.4.0"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/pdfkit": "^0.13.4",
+    "@types/cors": "^2.8.17",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
