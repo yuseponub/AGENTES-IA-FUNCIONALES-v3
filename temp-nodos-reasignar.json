@@ -1,16 +1,17 @@
 {
+  "name": "Nodos Reasignar Agente",
   "nodes": [
     {
       "parameters": {
         "jsCode": "// Nodo: Check Assignment\n// Verifica si la conversación debe ser reasignada\n\nconst payload = $json;\nconst body = $node['Webhook Callbell'].json.body || $node['Webhook Callbell'].json;\nconst message = body.event && body.payload ? body.payload : body;\n\n// Extraer email del agente asignado actualmente\nconst assignedUser = message.contact?.assignedUser || message.assignedUser || null;\nconst assignedEmail = assignedUser?.email || '';\nconst contactUuid = payload.contact_id || message.contact?.uuid || '';\n\n// Emails que deben ser reasignados\nconst emailsToReassign = [\n  'sergiosomnio@gmail.com',\n  'silviajsomnio@gmail.com',\n  'sofiasomnio1504@gmail.com'\n];\n\n// Email destino\nconst targetEmail = 'joseromerorincon041100@gmail.com';\n\n// Verificar si necesita reasignación\nconst needsReassign = assignedEmail && emailsToReassign.includes(assignedEmail.toLowerCase());\n\nconsole.log('👤 CHECK ASSIGNMENT:', {\n  phone: payload.phone,\n  currentAssigned: assignedEmail || 'none',\n  contactUuid: contactUuid,\n  needsReassign: needsReassign\n});\n\nreturn {\n  ...payload,\n  needs_reassign: needsReassign,\n  contact_uuid: contactUuid,\n  current_assigned: assignedEmail,\n  target_email: targetEmail\n};"
       },
-      "id": "check-assignment-node",
+      "id": "a1b2c3d4-1111-2222-3333-444455556666",
       "name": "Check Assignment",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -17456,
-        -1360
+        400,
+        300
       ]
     },
     {
@@ -37,13 +38,13 @@
         },
         "options": {}
       },
-      "id": "if-needs-reassign-node",
+      "id": "a1b2c3d4-2222-3333-4444-555566667777",
       "name": "IF Needs Reassign?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        -17248,
-        -1360
+        620,
+        300
       ]
     },
     {
@@ -57,35 +58,30 @@
         "jsonBody": "={{ { \"assignedUser\": $json.target_email } }}",
         "options": {}
       },
-      "id": "http-reassign-node",
+      "id": "a1b2c3d4-3333-4444-5555-666677778888",
       "name": "HTTP Reassign Contact",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        -17040,
-        -1456
-      ],
-      "credentials": {
-        "httpHeaderAuth": {
-          "id": "o7MjFlWPCOrkcPYR",
-          "name": "Header Auth account"
-        }
-      }
+        840,
+        200
+      ]
     },
     {
       "parameters": {
         "jsCode": "// Log reasignación completada\nconst prev = $node['IF Needs Reassign?'].json;\n\nconsole.log('✅ REASSIGNED:', {\n  phone: prev.phone,\n  from: prev.current_assigned,\n  to: prev.target_email\n});\n\nreturn prev;"
       },
-      "id": "log-reassign-node",
+      "id": "a1b2c3d4-4444-5555-6666-777788889999",
       "name": "Log Reassigned",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -16832,
-        -1456
+        1060,
+        200
       ]
     }
   ],
+  "pinData": {},
   "connections": {
     "Check Assignment": {
       "main": [
@@ -107,13 +103,7 @@
             "index": 0
           }
         ],
-        [
-          {
-            "node": "Check Blocked Tags and Duplicates",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        []
       ]
     },
     "HTTP Reassign Contact": {
@@ -126,17 +116,16 @@
           }
         ]
       ]
-    },
-    "Log Reassigned": {
-      "main": [
-        [
-          {
-            "node": "Check Blocked Tags and Duplicates",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
     }
-  }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "reasignar-v1",
+  "meta": {
+    "instanceId": "reasignar-agentes"
+  },
+  "id": "reasignar-workflow",
+  "tags": []
 }
