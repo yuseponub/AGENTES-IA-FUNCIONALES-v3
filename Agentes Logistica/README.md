@@ -7,7 +7,7 @@ Sistema de automatizacion para generar guias de envio con diferentes transportad
 ```
 Agentes Logistica/
 ├── Robots Logistica.json    # Workflow n8n completo
-├── robot-interrapidisimo/   # Servidor para Inter, Bogota y Envia
+├── robot-inter-envia-bog/   # Servidor para Inter, Bogota y Envia
 └── robot-coordinadora/      # Servidor para Coordinadora
 ```
 
@@ -15,9 +15,9 @@ Agentes Logistica/
 
 | Transportadora | Stage Bigin | Robot | Puerto |
 |----------------|-------------|-------|--------|
-| Interrapidisimo | ROBOT INTER | robot-interrapidisimo | 3002 |
-| Bogota | ROBOT BOGOTA | robot-interrapidisimo | 3002 |
-| Envia | ROBOT ENVIA | robot-interrapidisimo | 3002 |
+| Interrapidisimo | ROBOT INTER | robot-inter-envia-bog | 3002 |
+| Bogota | ROBOT BOGOTA | robot-inter-envia-bog | 3002 |
+| Envia | ROBOT ENVIA | robot-inter-envia-bog | 3002 |
 | Coordinadora | ROBOT COORD | robot-coordinadora | 3001 |
 
 ## Flujo General
@@ -44,8 +44,8 @@ Agentes Logistica/
 ### 1. Robots
 
 ```bash
-# Robot Interrapidisimo (puerto 3002)
-cd robot-interrapidisimo
+# Robot Inter/Envia/Bog (puerto 3002)
+cd robot-inter-envia-bog
 npm install
 npm run dev
 
