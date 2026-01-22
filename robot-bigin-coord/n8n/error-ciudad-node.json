@@ -1,0 +1,19 @@
+{
+  "name": "Error Ciudad Import",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Generar mensaje de error con datos completos\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { mensaje: '', cantidad: 0 } }];\n}\n\nconst errores = items.map(item => {\n  const p = item.json;\n  return `• *${p.nombres} ${p.apellidos}*\n   📍 ${p.direccion}\n   🏙️ ${p.ciudad}\n   📱 ${p.celular}\n   💰 $${p.totalConIva?.toLocaleString() || 'N/A'}\n   ❌ ${p._error}`;\n}).join('\\n\\n');\n\nreturn [{\n  json: {\n    mensaje: `❌ *Pedidos rechazados:*\\n\\n${errores}`,\n    cantidad: items.length\n  }\n}];"
+      },
+      "id": "error-ciudad",
+      "name": "Error: Ciudad Inválida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    }
+  ],
+  "connections": {},
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

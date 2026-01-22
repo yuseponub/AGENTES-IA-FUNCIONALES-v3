@@ -1,0 +1,85 @@
+{
+  "name": "[Sub] Bigin - Get Fresh Token",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "execute-trigger",
+      "name": "Execute Workflow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refresh-token",
+      "name": "Refresh Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"access_token\": \"{{ $json.access_token }}\",\n  \"authorization\": \"Zoho-oauthtoken {{ $json.access_token }}\"\n}",
+        "options": {}
+      },
+      "id": "output-token",
+      "name": "Return Token",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [680, 300]
+    }
+  ],
+  "connections": {
+    "Execute Workflow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Refresh Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Token": {
+      "main": [
+        [
+          {
+            "node": "Return Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -1,0 +1,408 @@
+{
+  "name": "🚚 Subir Órdenes a Coordinadora (Webhook)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "subir-ordenes-coord",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook: Subir Órdenes",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [260, 300],
+      "webhookId": "subir-ordenes-coord"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "authentication": "oAuth2",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:ROBOT COORD)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bigin-get-orders",
+      "name": "Bigin: Obtener Órdenes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 300],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "CONFIGURAR_ZOHO_OAUTH",
+          "name": "Zoho Bigin OAuth2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-orders-exist",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-orders",
+      "name": "¿Hay Órdenes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [700, 300]
+    },
+    {
+      "parameters": {
+        "model": "claude-sonnet-4-20250514",
+        "messages": {
+          "values": [
+            {
+              "content": "Procesas órdenes de Bigin para Coordinadora.\n\nREGLAS:\n\n1. TELÉFONO: Quitar 57 del inicio, quitar espacios/guiones. Debe ser 10 dígitos.\n   Ej: \"+57 316 3709528\" → \"3163709528\"\n\n2. NOMBRE: Primera palabra = nombres, resto = apellidos. Si solo hay una, apellidos = \"Cliente\"\n\n3. UNIDADES: 77900→1, 109900→2, 139900→3. Si otro valor, buscar \"(X unidades)\" en descripción.\n\n4. RECAUDO: Si nombre tiene \"&\" o tag \"PAGO ANTICIPADO\" → false. Sino → true\n\n5. CIUDAD: Poner el municipio en MAYÚSCULAS tal cual viene.\n\n6. DEPARTAMENTO: Poner el departamento en MAYÚSCULAS tal cual viene.\n\n7. VALORES FIJOS: referencia=\"AA1\", valorDeclarado=55000, peso=0.08, alto=5, largo=5, ancho=10, totalIva=0\n\nDevuelve SOLO JSON array, sin explicación:\n[{\n  \"identificacion\": \"10 dígitos\",\n  \"nombres\": \"string\",\n  \"apellidos\": \"string\",\n  \"direccion\": \"string\",\n  \"ciudad\": \"MUNICIPIO\",\n  \"departamento\": \"DEPARTAMENTO\",\n  \"celular\": \"10 dígitos\",\n  \"email\": \"string o null\",\n  \"referencia\": \"AA1\",\n  \"unidades\": number,\n  \"totalConIva\": number,\n  \"valorDeclarado\": 55000,\n  \"esRecaudoContraentrega\": boolean,\n  \"peso\": 0.08,\n  \"alto\": 5,\n  \"largo\": 5,\n  \"ancho\": 10,\n  \"biginOrderId\": \"string\",\n  \"biginOrderName\": \"string\"\n}]",
+              "role": "system"
+            },
+            {
+              "content": "=Procesa estas órdenes de Bigin:\n\n{{ JSON.stringify($json.data, null, 2) }}",
+              "role": "user"
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 4096
+        }
+      },
+      "id": "claude-process",
+      "name": "Claude: Procesar Datos",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.2,
+      "position": [920, 200],
+      "credentials": {
+        "anthropicApi": {
+          "id": "CONFIGURAR_ANTHROPIC_API",
+          "name": "Anthropic API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear respuesta de Claude\nconst response = $input.first().json;\nlet pedidos = [];\n\ntry {\n  const content = response.message?.content || response.content || response.text;\n  const jsonMatch = content.match(/\\[\\s*\\{[\\s\\S]*\\}\\s*\\]/);\n  if (jsonMatch) {\n    pedidos = JSON.parse(jsonMatch[0]);\n  }\n} catch (e) {\n  console.error('Error parseando respuesta:', e);\n}\n\nreturn pedidos.map(p => ({ json: p }));"
+      },
+      "id": "parse-claude",
+      "name": "Parsear Respuesta Claude",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1140, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar ciudades con el servidor\nconst pedidos = $input.all().map(item => item.json);\n\nconst response = await fetch('http://172.17.0.1:3001/api/validar-pedidos', {\n  method: 'POST',\n  headers: { 'Content-Type': 'application/json' },\n  body: JSON.stringify({ pedidos }),\n});\n\nconst resultado = await response.json();\n\n// Retornar pedidos con info de validación\nreturn resultado.pedidos.map(pedido => {\n  const { _index, ...datos } = pedido;\n  return { json: datos };\n});"
+      },
+      "id": "validar-ciudades",
+      "name": "Validar Ciudades",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-valido",
+              "leftValue": "={{ $json._valido }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "check-valido",
+      "name": "¿Ciudad Válida?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1540, 200]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:3001/api/crear-pedido",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "robot-crear-pedido",
+      "name": "Robot: Crear Pedido",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar mensaje de error para ciudades inválidas\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { mensaje: '', cantidad: 0 } }];\n}\n\nconst errores = items.map(item => {\n  const p = item.json;\n  return `• ${p.biginOrderName || 'Pedido'}: ${p._error}`;\n}).join('\\n');\n\nreturn [{\n  json: {\n    mensaje: `❌ *Pedidos rechazados:*\\n${errores}`,\n    cantidad: items.length\n  }\n}];"
+      },
+      "id": "error-ciudad",
+      "name": "Error: Ciudad Inválida",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Recopilar resultados del robot\nconst items = $input.all();\n\nif (items.length === 0) {\n  return [{ json: { mensaje: '', exitosos: 0, fallidos: 0 } }];\n}\n\nconst exitosos = items.filter(i => i.json.success).length;\nconst fallidos = items.filter(i => !i.json.success).length;\n\nconst pedidosCreados = items\n  .filter(i => i.json.success)\n  .map(i => i.json.numeroPedido)\n  .join(', ');\n\nconst errores = items\n  .filter(i => !i.json.success)\n  .map(i => `• ${i.json.biginOrderName || 'Pedido'}: ${i.json.error}`)\n  .join('\\n');\n\nlet mensaje = '';\n\nif (exitosos > 0) {\n  mensaje += `✅ *${exitosos} pedido(s) creado(s):* ${pedidosCreados}`;\n}\n\nif (fallidos > 0) {\n  mensaje += `\\n❌ *${fallidos} error(es) del robot:*\\n${errores}`;\n}\n\nreturn [{ json: { mensaje, exitosos, fallidos } }];"
+      },
+      "id": "resumen-resultados",
+      "name": "Generar Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1980, 100]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar mensajes\nconst items = $input.all();\nlet mensajeFinal = '';\n\nfor (const item of items) {\n  if (item.json.mensaje) {\n    mensajeFinal += item.json.mensaje + '\\n\\n';\n  }\n}\n\nmensajeFinal = mensajeFinal.trim() || '⚠️ No se procesaron pedidos';\n\nreturn [{ json: { mensaje: mensajeFinal } }];"
+      },
+      "id": "combinar-mensajes",
+      "name": "Combinar Mensajes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "CONFIGURAR_CHANNEL_ID",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-respuesta",
+      "name": "Slack: Enviar Resultado",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2420, 200],
+      "credentials": {
+        "slackApi": {
+          "id": "CONFIGURAR_SLACK",
+          "name": "Slack API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, mensaje: $json.mensaje }) }}",
+        "options": {}
+      },
+      "id": "respond-webhook",
+      "name": "Responder Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [2640, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"success\": false, \"mensaje\": \"No hay órdenes en stage ROBOT COORD\"}",
+        "options": {}
+      },
+      "id": "respond-no-orders",
+      "name": "Responder: Sin Órdenes",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [920, 420]
+    }
+  ],
+  "connections": {
+    "Webhook: Subir Órdenes": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Obtener Órdenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Obtener Órdenes": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Órdenes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Órdenes?": {
+      "main": [
+        [
+          {
+            "node": "Claude: Procesar Datos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Responder: Sin Órdenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude: Procesar Datos": {
+      "main": [
+        [
+          {
+            "node": "Parsear Respuesta Claude",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parsear Respuesta Claude": {
+      "main": [
+        [
+          {
+            "node": "Validar Ciudades",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validar Ciudades": {
+      "main": [
+        [
+          {
+            "node": "¿Ciudad Válida?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Ciudad Válida?": {
+      "main": [
+        [
+          {
+            "node": "Robot: Crear Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error: Ciudad Inválida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: Crear Pedido": {
+      "main": [
+        [
+          {
+            "node": "Generar Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Resumen": {
+      "main": [
+        [
+          {
+            "node": "Combinar Mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error: Ciudad Inválida": {
+      "main": [
+        [
+          {
+            "node": "Combinar Mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combinar Mensajes": {
+      "main": [
+        [
+          {
+            "node": "Slack: Enviar Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Enviar Resultado": {
+      "main": [
+        [
+          {
+            "node": "Responder Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 1,
+  "updatedAt": "2026-01-21T00:00:00.000Z",
+  "versionId": "3"
+}
