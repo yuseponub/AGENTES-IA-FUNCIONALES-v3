@@ -691,6 +691,579 @@ async getDataWithRetry(maxRetries = 3): Promise<any> {
 
 ---
 
+## GUIA: Crear un Nuevo Robot desde Cero
+
+Esta guia explica paso a paso como crear un robot similar para otra plataforma web.
+
+### Paso 1: Estructura de Carpetas
+
+```bash
+mkdir mi-nuevo-robot
+cd mi-nuevo-robot
+
+# Crear estructura
+mkdir -p src/adapters src/api src/types src/tools storage/sessions
+
+# Archivos principales
+touch src/api/server.ts
+touch src/adapters/plataforma-adapter.ts
+touch src/types/index.ts
+touch package.json
+touch tsconfig.json
+touch .env
+```
+
+Estructura final:
+```
+mi-nuevo-robot/
+├── src/
+│   ├── api/
+│   │   └── server.ts           # Express API
+│   ├── adapters/
+│   │   └── plataforma-adapter.ts  # Automatizacion Playwright
+│   ├── types/
+│   │   └── index.ts            # Interfaces
+│   └── tools/                  # Scripts de testing
+├── storage/
+│   └── sessions/               # Cookies guardadas
+├── package.json
+├── tsconfig.json
+└── .env
+```
+
+### Paso 2: package.json Base
+
+```json
+{
+  "name": "mi-nuevo-robot",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "tsx watch src/api/server.ts",
+    "start": "tsx src/api/server.ts",
+    "test:login": "tsx src/tools/test-login.ts"
+  },
+  "dependencies": {
+    "playwright": "^1.40.0",
+    "express": "^4.18.2",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0",
+    "@types/node": "^20.10.0",
+    "@types/express": "^4.17.21"
+  }
+}
+```
+
+### Paso 3: Adapter Base (Boilerplate)
+
+```typescript
+// src/adapters/plataforma-adapter.ts
+import { chromium, Browser, Page, BrowserContext } from 'playwright';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// ═══════════════════════════════════════════════════════════
+// CONFIGURACION - MODIFICAR PARA CADA PLATAFORMA
+// ═══════════════════════════════════════════════════════════
+
+const URLS = {
+  login: 'https://plataforma.com/login',
+  dashboard: 'https://plataforma.com/dashboard',
+  formulario: 'https://plataforma.com/nuevo',
+};
+
+const SELECTORS = {
+  login: {
+    userInput: 'input[name="email"]',
+    passwordInput: 'input[name="password"]',
+    submitButton: 'button[type="submit"]',
+  },
+  formulario: {
+    // Agregar selectores del formulario
+    campo1: 'input[name="campo1"]',
+    campo2: 'input[name="campo2"]',
+    submitButton: 'button[type="submit"]',
+  },
+  resultado: {
+    successIcon: '.success, .swal2-success',
+    errorIcon: '.error, .swal2-error',
+    confirmButton: '.confirm, .swal2-confirm',
+  },
+};
+
+// ═══════════════════════════════════════════════════════════
+// CLASE ADAPTER
+// ═══════════════════════════════════════════════════════════
+
+export class PlataformaAdapter {
+  private browser: Browser | null = null;
+  private context: BrowserContext | null = null;
+  private page: Page | null = null;
+  private isLoggedIn: boolean = false;
+
+  private config: { url: string; user: string; password: string };
+  private cookiesPath: string;
+
+  constructor(config: { url: string; user: string; password: string }) {
+    this.config = config;
+    this.cookiesPath = path.join(process.cwd(), 'storage/sessions/cookies.json');
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // INICIALIZACION
+  // ─────────────────────────────────────────────────────────
+
+  async init(): Promise<void> {
+    console.log('🚀 Iniciando browser...');
+
+    this.browser = await chromium.launch({
+      headless: true,  // true para servidor, false para debug
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
+    this.context = await this.browser.newContext({
+      viewport: { width: 1920, height: 1080 },
+      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    });
+
+    // Cargar cookies si existen
+    await this.loadCookies();
+
+    this.page = await this.context.newPage();
+    console.log('✅ Browser iniciado');
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // MANEJO DE COOKIES
+  // ─────────────────────────────────────────────────────────
+
+  private async loadCookies(): Promise<void> {
+    if (!this.context) return;
+
+    try {
+      if (fs.existsSync(this.cookiesPath)) {
+        const cookies = JSON.parse(fs.readFileSync(this.cookiesPath, 'utf-8'));
+        await this.context.addCookies(cookies);
+        console.log('🍪 Cookies cargadas');
+      }
+    } catch (e) {
+      console.log('⚠️ No se pudieron cargar cookies');
+    }
+  }
+
+  private async saveCookies(): Promise<void> {
+    if (!this.context) return;
+
+    try {
+      const cookies = await this.context.cookies();
+      const dir = path.dirname(this.cookiesPath);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(this.cookiesPath, JSON.stringify(cookies, null, 2));
+      console.log('🍪 Cookies guardadas');
+    } catch (e) {
+      console.log('⚠️ No se pudieron guardar cookies');
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // LOGIN
+  // ─────────────────────────────────────────────────────────
+
+  async login(): Promise<boolean> {
+    if (!this.page) await this.init();
+
+    console.log('🔐 Iniciando login...');
+
+    try {
+      await this.page!.goto(URLS.login, { waitUntil: 'networkidle' });
+      await this.page!.waitForTimeout(2000);
+
+      // Verificar si ya estamos logueados (redireccion a dashboard)
+      if (this.page!.url().includes('/dashboard') ||
+          this.page!.url().includes('/panel')) {
+        console.log('✅ Sesion ya activa');
+        this.isLoggedIn = true;
+        return true;
+      }
+
+      // Llenar credenciales
+      console.log('📝 Llenando credenciales...');
+      await this.page!.fill(SELECTORS.login.userInput, this.config.user);
+      await this.page!.waitForTimeout(500);
+      await this.page!.fill(SELECTORS.login.passwordInput, this.config.password);
+      await this.page!.waitForTimeout(500);
+
+      // Click en login
+      console.log('🖱️ Haciendo click en login...');
+      await this.page!.click(SELECTORS.login.submitButton);
+      await this.page!.waitForTimeout(5000);
+
+      // Verificar login exitoso
+      if (this.page!.url().includes('/dashboard') ||
+          this.page!.url().includes('/panel')) {
+        console.log('✅ Login exitoso');
+        await this.saveCookies();
+        this.isLoggedIn = true;
+        return true;
+      }
+
+      console.log('❌ Login falló');
+      return false;
+
+    } catch (error) {
+      console.error('❌ Error en login:', error);
+      return false;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // OPERACION PRINCIPAL (PERSONALIZAR)
+  // ─────────────────────────────────────────────────────────
+
+  async ejecutarOperacion(datos: any): Promise<{ success: boolean; resultado?: any; error?: string }> {
+    if (!this.isLoggedIn) {
+      const loginOk = await this.login();
+      if (!loginOk) {
+        return { success: false, error: 'Error en login' };
+      }
+    }
+
+    console.log('📦 Ejecutando operacion...');
+
+    try {
+      // 1. Navegar al formulario
+      await this.page!.goto(URLS.formulario, { waitUntil: 'networkidle' });
+      await this.page!.waitForTimeout(3000);
+
+      // 2. Llenar campos (PERSONALIZAR SEGUN FORMULARIO)
+      await this.fillInput(SELECTORS.formulario.campo1, datos.campo1);
+      await this.fillInput(SELECTORS.formulario.campo2, datos.campo2);
+
+      // 3. Enviar formulario
+      console.log('📤 Enviando...');
+      await this.page!.click(SELECTORS.formulario.submitButton);
+      await this.page!.waitForTimeout(5000);
+
+      // 4. Verificar resultado
+      const result = await this.checkResult();
+      return result;
+
+    } catch (error) {
+      console.error('❌ Error:', error);
+
+      // Guardar screenshot de error
+      const errorPath = path.join(process.cwd(), 'storage/artifacts', `error-${Date.now()}.png`);
+      await this.page!.screenshot({ path: errorPath });
+
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // HELPERS
+  // ─────────────────────────────────────────────────────────
+
+  private async fillInput(selector: string, value: string): Promise<void> {
+    try {
+      const field = await this.page!.$(selector);
+      if (field) {
+        await field.fill(value);
+        console.log(`   ✓ ${selector}: ${value.substring(0, 30)}...`);
+      }
+    } catch (e) {
+      console.log(`   ⚠️ Error en ${selector}`);
+    }
+  }
+
+  private async safeClick(selector: string): Promise<boolean> {
+    try {
+      const element = await this.page!.$(selector);
+      if (!element) return false;
+
+      const isDisabled = await element.evaluate(el => (el as any).disabled);
+      if (isDisabled) {
+        console.log(`   ⏭️ Elemento deshabilitado: ${selector}`);
+        return false;
+      }
+
+      await element.click();
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  private async checkResult(): Promise<{ success: boolean; resultado?: any; error?: string }> {
+    const successIcon = await this.page!.$(SELECTORS.resultado.successIcon);
+    const errorIcon = await this.page!.$(SELECTORS.resultado.errorIcon);
+
+    if (successIcon) {
+      console.log('✅ Operacion exitosa');
+
+      // Cerrar modal si hay boton
+      const confirmBtn = await this.page!.$(SELECTORS.resultado.confirmButton);
+      if (confirmBtn) await confirmBtn.click();
+
+      return { success: true };
+    }
+
+    if (errorIcon) {
+      const errorText = await this.page!.$eval('.swal-text, .swal2-content, .error-message',
+        el => el.textContent).catch(() => 'Error desconocido');
+      return { success: false, error: errorText || 'Error desconocido' };
+    }
+
+    // Sin notificacion, asumir exito
+    return { success: true };
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // CIERRE
+  // ─────────────────────────────────────────────────────────
+
+  async close(): Promise<void> {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.context = null;
+      this.page = null;
+      this.isLoggedIn = false;
+      console.log('🔒 Browser cerrado');
+    }
+  }
+}
+```
+
+### Paso 4: Server API Base (Boilerplate)
+
+```typescript
+// src/api/server.ts
+import 'dotenv/config';
+import express from 'express';
+import { PlataformaAdapter } from '../adapters/plataforma-adapter.js';
+
+const app = express();
+app.use(express.json());
+
+const PORT = process.env.PORT || 3001;
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: Crear adapter nuevo para cada request
+// ═══════════════════════════════════════════════════════════
+
+async function createAdapter(): Promise<PlataformaAdapter> {
+  const adapter = new PlataformaAdapter({
+    url: process.env.PLATAFORMA_URL || '',
+    user: process.env.PLATAFORMA_USER || '',
+    password: process.env.PLATAFORMA_PASSWORD || '',
+  });
+
+  await adapter.init();
+
+  const loginOk = await adapter.login();
+  if (!loginOk) {
+    await adapter.close();
+    throw new Error('Error en login');
+  }
+
+  return adapter;
+}
+
+// ═══════════════════════════════════════════════════════════
+// ENDPOINTS
+// ═══════════════════════════════════════════════════════════
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', service: 'mi-nuevo-robot' });
+});
+
+// Operacion individual
+app.post('/api/ejecutar', async (req, res) => {
+  console.log('\n' + '═'.repeat(60));
+  console.log('📦 POST /api/ejecutar');
+
+  let adapter: PlataformaAdapter | null = null;
+
+  try {
+    adapter = await createAdapter();
+    const result = await adapter.ejecutarOperacion(req.body);
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    });
+  } finally {
+    // SIEMPRE cerrar el browser
+    if (adapter) {
+      console.log('🔒 Cerrando browser...');
+      await adapter.close();
+    }
+  }
+});
+
+// Operacion batch (multiples)
+app.post('/api/ejecutar-batch', async (req, res) => {
+  const items = req.body.items || [];
+
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ success: false, error: 'Se requiere array de items' });
+  }
+
+  console.log(`📋 Procesando ${items.length} items...`);
+  const resultados: any[] = [];
+
+  for (let i = 0; i < items.length; i++) {
+    console.log(`\n[${i + 1}/${items.length}]`);
+
+    let adapter: PlataformaAdapter | null = null;
+
+    try {
+      adapter = await createAdapter();
+      const result = await adapter.ejecutarOperacion(items[i]);
+      resultados.push({ ...result, index: i });
+    } catch (error) {
+      resultados.push({
+        success: false,
+        error: error instanceof Error ? error.message : 'Error',
+        index: i,
+      });
+    } finally {
+      if (adapter) await adapter.close();
+    }
+
+    // Pausa entre operaciones
+    if (i < items.length - 1) {
+      await new Promise(r => setTimeout(r, 2000));
+    }
+  }
+
+  const exitosos = resultados.filter(r => r.success).length;
+  res.json({
+    success: exitosos === items.length,
+    total: items.length,
+    exitosos,
+    fallidos: items.length - exitosos,
+    resultados,
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// INICIAR SERVIDOR
+// ═══════════════════════════════════════════════════════════
+
+app.listen(PORT, () => {
+  console.log(`
+═══════════════════════════════════════════════════
+🚀 MI NUEVO ROBOT API
+═══════════════════════════════════════════════════
+📍 URL: http://localhost:${PORT}
+
+📋 Endpoints:
+   GET  /api/health    - Estado
+   POST /api/ejecutar  - Operacion individual
+   POST /api/ejecutar-batch - Multiples operaciones
+
+⏳ Esperando requests...
+═══════════════════════════════════════════════════
+  `);
+});
+```
+
+### Paso 5: Checklist de Implementacion
+
+```
+□ FASE 1: ANALISIS DE LA PLATAFORMA
+  □ Identificar URL de login
+  □ Identificar URL del formulario/operacion
+  □ Identificar selectores CSS de campos
+  □ Identificar como detectar exito/error
+  □ Verificar si usa cookies para sesion
+  □ Documentar tecnologias (React, MUI, etc)
+
+□ FASE 2: IMPLEMENTAR ADAPTER
+  □ Crear estructura de carpetas
+  □ Configurar URLS y SELECTORS
+  □ Implementar init() con Playwright
+  □ Implementar login() con verificacion
+  □ Implementar operacion principal
+  □ Implementar close()
+  □ Probar login manualmente (headless: false)
+
+□ FASE 3: IMPLEMENTAR API
+  □ Crear server.ts con Express
+  □ Implementar endpoint health
+  □ Implementar endpoint operacion individual
+  □ Implementar endpoint batch (si aplica)
+  □ Asegurar try/finally para cerrar browser
+
+□ FASE 4: TESTING
+  □ Probar health check
+  □ Probar operacion individual
+  □ Probar batch con multiples items
+  □ Probar manejo de errores
+  □ Verificar que cookies se guardan/cargan
+
+□ FASE 5: INTEGRACION CON N8N
+  □ Probar llamada desde n8n
+  □ Usar IP 172.18.0.1 (no localhost)
+  □ Verificar formato de respuesta
+  □ Crear nodos de formateo Slack
+```
+
+### Paso 6: Errores Comunes y Soluciones
+
+| Error | Causa | Solucion |
+|-------|-------|----------|
+| `net::ERR_CONNECTION_REFUSED` | Browser no puede conectar | Verificar URL de la plataforma |
+| `Timeout waiting for selector` | Selector incorrecto o pagina no cargo | Aumentar timeout, verificar selector |
+| `Element is not clickable` | Elemento oculto o superpuesto | Usar `{ force: true }` o scroll |
+| `Session expired` | Cookies vencidas | Borrar cookies, hacer login de nuevo |
+| `Browser already closed` | Cerrado antes de tiempo | Verificar flujo async/await |
+| `Memory leak` | Browser no se cierra | Agregar try/finally con close() |
+| `EADDRINUSE` | Puerto ocupado | Matar proceso: `lsof -i :PORT -t \| xargs kill` |
+
+### Paso 7: Tips de Debugging
+
+```typescript
+// 1. Modo visible (no headless) para ver que hace
+this.browser = await chromium.launch({
+  headless: false,  // <- cambiar a false
+  slowMo: 1000,     // <- agregar delay entre acciones
+});
+
+// 2. Guardar screenshot en cada paso
+await this.page.screenshot({ path: `step-${stepNumber}.png` });
+
+// 3. Imprimir HTML de un elemento
+const html = await this.page.$eval('selector', el => el.outerHTML);
+console.log(html);
+
+// 4. Esperar a que aparezca elemento
+await this.page.waitForSelector('selector', { timeout: 30000 });
+
+// 5. Imprimir URL actual
+console.log('URL actual:', this.page.url());
+
+// 6. Listar todos los inputs
+const inputs = await this.page.$$eval('input', els =>
+  els.map(el => ({ name: el.name, id: el.id, type: el.type }))
+);
+console.log('Inputs:', inputs);
+```
+
+---
+
 ## Notas para Futuros Robots
 
 1. **Headless en servidor**: Usar `headless: true` y `--no-sandbox`
@@ -700,3 +1273,6 @@ async getDataWithRetry(maxRetries = 3): Promise<any> {
 5. **Cerrar browser siempre**: Usar try/finally para evitar fugas
 6. **Batch con pausas**: 2+ segundos entre operaciones para no sobrecargar
 7. **Cookies para sesion**: Evita login repetido, mas rapido
+8. **Un browser por request**: Evita problemas de concurrencia y memoria
+9. **Logs detallados**: Facilita debugging en produccion
+10. **Mismo servidor que n8n**: Usar IP 172.18.0.1 para comunicacion
