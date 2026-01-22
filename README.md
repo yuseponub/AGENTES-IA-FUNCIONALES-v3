@@ -99,21 +99,21 @@ v3dsl-bot/
 │   ├── FLUJO-DE-INTENTS.md            # Diagrama de flujo de intents
 │   └── BASE-DE-DATOS.md               # Esquema de BD y queries
 ├── workflows/
-│   ├── 01-historial-v3.json           # Workflow Historial v3
-│   ├── 02-carolina-v3.json            # Workflow Carolina v3
-│   ├── 03-state-analyzer.json         # Workflow State Analyzer
-│   ├── 04-data-extractor.json         # Workflow Data Extractor
-│   ├── 05-order-manager.json          # Workflow Order Manager
-│   ├── 06-snapshot.json               # Workflow Snapshot
-│   └── 07-proactive-timers.json       # Workflow Proactive Timers
+│   ├── 01-historial-v3.json              # Workflow Historial v3
+│   ├── 02-carolina-v3.json               # Workflow Carolina v3
+│   ├── 03-state-analyzer.json            # Workflow State Analyzer
+│   ├── 04-data-extractor.json            # Workflow Data Extractor
+│   ├── 05-order-manager.json             # Workflow Order Manager
+│   ├── 06-proactive-timer-instance.json  # Workflow Proactive Timer ✅ ACTIVO
+│   └── 07-snapshot.json                  # Workflow Snapshot
 ├── docs/
 │   ├── 01-HISTORIAL-V3.md             # Doc técnica Historial v3
 │   ├── 02-CAROLINA-V3.md              # Doc técnica Carolina v3
 │   ├── 03-STATE-ANALYZER.md           # Doc técnica State Analyzer
 │   ├── 04-DATA-EXTRACTOR.md           # Doc técnica Data Extractor
 │   ├── 05-ORDER-MANAGER.md            # Doc técnica Order Manager
-│   ├── 06-SNAPSHOT.md                 # Doc técnica Snapshot
-│   └── 07-PROACTIVE-TIMERS.md         # Doc técnica Proactive Timers
+│   ├── 06-PROACTIVE-TIMER.md          # Doc técnica Proactive Timer ✅
+│   └── 07-SNAPSHOT.md                 # Doc técnica Snapshot
 └── TODO.md                            # Lista de tareas pendientes
 ```
 
@@ -188,14 +188,16 @@ v3dsl-bot/
   - Calcular mensajes pendientes (inbound después de último outbound)
   - Retornar snapshot completo: sesión, mensajes, pending, state, tags, version
 
-### 7. **Proactive Timers** (Acciones Automáticas) ⚠️ EN CONFIGURACIÓN
+### 7. **Proactive Timers** (Acciones Automáticas) ✅ ACTIVO
 - **Propósito:** Recordatorios y acciones automáticas por tiempo
-- **Trigger:** Cron cada 1 minuto
+- **Trigger:** Webhook POST + loop interno cada 2 minutos
 - **Responsabilidades:**
-  - Revisar sesiones activas inactivas
-  - Enviar recordatorio de datos (6 min de inactividad)
-  - Crear orden automática sin promo (10 min de inactividad)
-  - Marcar acciones ejecutadas para evitar duplicados
+  - Monitorear sesiones activas en modo collecting_data
+  - Enviar recordatorio sin datos (10 min sin respuesta)
+  - Solicitar datos faltantes (6 min con datos parciales)
+  - Ofrecer promos cuando datos mínimos completos (2 min)
+  - Crear orden automática (10 min después de ofrecer promos)
+  - Prevenir acciones duplicadas con flags de idempotencia
 
 ## 🗄️ Base de Datos (PostgreSQL)
 
@@ -343,10 +345,10 @@ BIGIN_API_KEY=...
    4. `04-data-extractor.json`
    5. `05-order-manager.json`
    6. `06-snapshot.json`
-   7. `07-proactive-timers.json` ⚠️ NO ACTIVAR aún
+   7. `06-proactive-timer-instance.json` ✅ YA ACTIVO
 
 4. Configurar credenciales en cada workflow
-5. Activar workflows (excepto Proactive Timers)
+5. Activar todos los workflows
 
 ## 🧪 Testing
 
@@ -519,5 +521,5 @@ Para soporte técnico, contactar a:
 
 ---
 
-**Última actualización:** 17 de Enero 2026
-**Versión:** v3.0.0
+**Última actualización:** 22 de Enero 2026
+**Versión:** v3.1.0

@@ -2,22 +2,24 @@
 
 ## 🚀 Tareas Prioritarias
 
-### 1. ⚠️ Configurar y Activar Proactive Timers
-**Estado:** ⚠️ PENDIENTE - NO ACTIVAR hasta configurar
+### 1. ✅ Proactive Timers
+**Estado:** ✅ COMPLETADO Y ACTIVO - 22 Enero 2026
 
-**Sub-tareas:**
-- [ ] Validar timers (6 min para recordatorio, 10 min para orden auto)
-- [ ] Ajustar para timezone Colombia (UTC-5)
-- [ ] Probar recordatorio de datos en ambiente de testing
-- [ ] Probar creación automática de orden sin promo
-- [ ] Verificar que no envía duplicados (flags reminder_sent, order_created)
-- [ ] Agregar logs detallados de acciones ejecutadas
-- [ ] Agregar notificación a equipo cuando se cree orden automática
-- [ ] Activar workflow después de validación completa
+**Funcionalidades implementadas:**
+- [x] Timer activado con `"active": true` en workflow
+- [x] Loop cada 2 minutos con máximo 20 iteraciones (40 min total)
+- [x] Recordatorio sin datos (10 min sin respuesta)
+- [x] Solicitud de datos faltantes (6 min con datos parciales)
+- [x] Ofrecer promos cuando datos mínimos completos (2 min)
+- [x] Crear orden automática (10 min después de ofrecer promos)
+- [x] Flags de idempotencia (_action_no_data_sent, _action_missing_data_sent, etc.)
+- [x] Prevención de duplicados (_proactive_timer_active)
+- [x] Detección de respuesta del cliente (2 min ventana)
+- [x] Integración con Order Manager (promo_override: "WPP")
 
-**Archivos afectados:**
-- `workflows/07-proactive-timers.json`
-- `docs/07-PROACTIVE-TIMERS.md`
+**Archivos:**
+- `workflows/06-proactive-timer-instance.json` (ACTIVO)
+- `docs/06-PROACTIVE-TIMER.md`
 
 ---
 
@@ -318,25 +320,20 @@ INSERT INTO directorio_municipios (departamento, municipio, dias_entrega) VALUES
 - [x] Data Extractor capturando datos
 - [x] Order Manager creando órdenes
 - [x] Snapshot retornando estado
-- [ ] ⚠️ Proactive Timers configurado y probado
+- [x] ✅ Proactive Timers configurado y activo
+- [x] ✅ Robot de Bigin con relogin y link de Callbell
 - [ ] 🎯 Intents faltantes implementados
 - [ ] 📍 Directorio de municipios funcionando
-- [ ] 🤖 Robot de Bigin con relogin y link de Callbell
 
 ---
 
-## 📅 Cronograma Sugerido
+## 📅 Próximas Tareas
 
-### Semana 1 (URGENTE)
-- [ ] Día 1-2: Actualizar Robot de Bigin (relogin, ventanas, link)
-- [ ] Día 3-4: Configurar Proactive Timers
-- [ ] Día 5: Testing completo de flujo end-to-end
+### Alta Prioridad
+- [ ] Implementar Directorio de Municipios (tiempos de entrega)
+- [ ] Completar intents faltantes (cambios de pedido, cancelaciones, seguimiento)
 
-### Semana 2 (ALTA PRIORIDAD)
-- [ ] Día 1-3: Implementar Directorio de Municipios
-- [ ] Día 4-5: Completar intents faltantes
-
-### Semana 3 (MEJORAS)
+### Mejoras Continuas
 - [ ] Optimizar plantillas
 - [ ] Agregar variaciones de respuestas
 - [ ] Implementar analytics básico
@@ -359,5 +356,5 @@ INSERT INTO directorio_municipios (departamento, municipio, dias_entrega) VALUES
 
 ---
 
-**Última actualización:** 17 de Enero 2026
+**Última actualización:** 22 de Enero 2026
 **Responsable:** Claude Code + yuseponub
