@@ -29,9 +29,14 @@ PUERTO: 3001
 ```
 
 **CRITICO**: El robot DEBE correr en el mismo servidor que n8n porque:
-- n8n llama al robot via `http://172.18.0.1:3001` (IP del host Docker)
+- n8n llama al robot via `http://172.17.0.1:3001` (IP del host Docker)
 - Si el robot esta en otro servidor, n8n no podra comunicarse
 - El robot necesita acceso a `/opt/n8n/local-files/` para archivos compartidos
+
+**NOTA:** La IP `172.17.0.1` es el gateway por defecto de Docker. Si tu red Docker usa otra IP, verificar con:
+```bash
+docker network inspect bridge | grep Gateway
+```
 
 ### Iniciar el servidor
 
@@ -476,16 +481,26 @@ Crea multiples pedidos en secuencia con pausa de 2 segundos entre cada uno.
 
 ## Sistema de Ciudades
 
+### Ubicacion de Archivos
+
+```
+robot-coordinadora/
+└── data/
+    ├── ciudades-coordinadora.txt   # 1488 ciudades totales
+    └── ciudades-SI-recaudo.txt     # 1181 ciudades con COD
+```
+
 ### Archivos de Ciudades
 
-1. **ciudades-coordinadora.txt** (1488 ciudades)
+1. **data/ciudades-coordinadora.txt** (1488 ciudades)
    - Todas las ciudades donde Coordinadora hace envios
    - Formato: `MUNICIPIO (ABREV_DEPTO)`
    - Ejemplo: `MEDELLIN (ANT)`, `BOGOTA (C/MARCA)`
 
-2. **ciudades-SI-recaudo.txt** (1181 ciudades)
+2. **data/ciudades-SI-recaudo.txt** (1181 ciudades)
    - Ciudades que aceptan pago contra entrega (COD)
    - Mismo formato
+   - Si la ciudad NO esta en este archivo, `esRecaudoContraentrega` debe ser `false`
 
 ### Mapeo de Departamentos
 

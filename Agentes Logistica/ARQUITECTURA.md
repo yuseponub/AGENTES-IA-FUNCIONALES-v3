@@ -163,8 +163,13 @@ El sistema automatiza la generacion de guias de envio para 4 transportadoras dif
 ### 5. Robots
 | Robot | Puerto | IP Docker | Tecnologia |
 |-------|--------|-----------|------------|
-| robot-coordinadora | 3001 | 172.18.0.1 | Playwright |
+| robot-coordinadora | 3001 | 172.17.0.1 | Playwright |
 | robot-inter-envia-bog | 3002 | 172.18.0.1 | PDFKit/ExcelJS |
+
+**NOTA sobre IPs Docker:**
+- `172.17.0.1` = Gateway de la red `bridge` (default)
+- `172.18.0.1` = Gateway de la red `n8n_default` (si n8n usa red custom)
+- Verificar con: `docker network inspect <red> | grep Gateway`
 
 ---
 
@@ -202,8 +207,10 @@ El sistema automatiza la generacion de guias de envio para 4 transportadoras dif
 │     - Extrae JSON array de la respuesta                                 │
 │                                                                          │
 │  6. Validar Ciudades                                                    │
-│     POST http://172.18.0.1:3001/api/validar-pedidos                     │
+│     POST http://172.17.0.1:3001/api/validar-pedidos                     │
 │     - Valida que las ciudades existan en Coordinadora                   │
+│     - Usa: data/ciudades-coordinadora.txt (1488 ciudades)               │
+│     - Usa: data/ciudades-SI-recaudo.txt (1181 con COD)                  │
 │     - Marca pedidos como _valido: true/false                            │
 │                                                                          │
 │  7. ¿Ciudad Valida?                                                     │
@@ -741,11 +748,9 @@ curl http://localhost:3001/health
 http://172.18.0.1:3001
 ```
 
-⚠️ **IMPORTANTE:** El archivo JSON tiene una inconsistencia:
-- Validar pedidos usa: `172.18.0.1:3001`
-- Crear pedidos usa: `172.17.0.1:3001`
-
-Ambos deberian usar `172.18.0.1`. Verificar la red Docker.
+**IP Docker para robot-coordinadora:** `172.17.0.1:3001`
+- Ambos endpoints (validar-pedidos y crear-pedidos-batch) usan esta IP
+- Es el gateway de la red Docker `bridge`
 
 ---
 
