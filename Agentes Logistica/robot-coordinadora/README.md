@@ -4,15 +4,157 @@ Servidor Node.js que automatiza la creacion de pedidos en el portal web de Coord
 
 ## Tabla de Contenidos
 
-1. [Arquitectura General](#arquitectura-general)
-2. [Plataforma Coordinadora](#plataforma-coordinadora)
-3. [Mecanismo de Automatizacion](#mecanismo-de-automatizacion)
-4. [Estructura del Codigo](#estructura-del-codigo)
-5. [API Endpoints](#api-endpoints)
-6. [Sistema de Ciudades](#sistema-de-ciudades)
-7. [Flujo Completo](#flujo-completo)
-8. [Configuracion](#configuracion)
-9. [Patrones Reutilizables](#patrones-reutilizables)
+1. [IMPORTANTE: Operacion del Robot](#importante-operacion-del-robot)
+2. [Arquitectura General](#arquitectura-general)
+3. [Plataforma Coordinadora](#plataforma-coordinadora)
+4. [Mecanismo de Automatizacion](#mecanismo-de-automatizacion)
+5. [Estructura del Codigo](#estructura-del-codigo)
+6. [API Endpoints](#api-endpoints)
+7. [Sistema de Ciudades](#sistema-de-ciudades)
+8. [Flujo Completo](#flujo-completo)
+9. [Configuracion](#configuracion)
+10. [Patrones Reutilizables](#patrones-reutilizables)
+
+---
+
+## IMPORTANTE: Operacion del Robot
+
+### Servidor donde debe correr
+
+```
+SERVIDOR: VPS de produccion (mismo donde corre n8n)
+IP: El mismo servidor donde esta n8n
+RUTA: /root/proyectos/coordinadora-bot
+PUERTO: 3001
+```
+
+**CRITICO**: El robot DEBE correr en el mismo servidor que n8n porque:
+- n8n llama al robot via `http://172.18.0.1:3001` (IP del host Docker)
+- Si el robot esta en otro servidor, n8n no podra comunicarse
+- El robot necesita acceso a `/opt/n8n/local-files/` para archivos compartidos
+
+### Iniciar el servidor
+
+```bash
+# Opcion 1: Desarrollo (con hot-reload)
+cd /root/proyectos/coordinadora-bot
+npm run api:dev
+
+# Opcion 2: Produccion (background con nohup)
+cd /root/proyectos/coordinadora-bot
+nohup npx tsx src/api/server.ts > /tmp/coordinadora-api.log 2>&1 &
+
+# Opcion 3: Produccion con PM2 (recomendado)
+cd /root/proyectos/coordinadora-bot
+npx pm2 start "npx tsx src/api/server.ts" --name coordinadora-bot --cwd /root/proyectos/coordinadora-bot
+npx pm2 save
+```
+
+### Verificar que esta corriendo
+
+```bash
+# Ver si el puerto esta en uso
+lsof -i :3001
+
+# Health check
+curl http://localhost:3001/api/health
+
+# Ver logs (si uso nohup)
+tail -f /tmp/coordinadora-api.log
+
+# Ver logs (si uso pm2)
+npx pm2 logs coordinadora-bot
+```
+
+### Detener el servidor
+
+```bash
+# Si uso nohup - encontrar y matar el proceso
+lsof -i :3001 -t | xargs kill -9
+
+# Si uso pm2
+npx pm2 stop coordinadora-bot
+npx pm2 delete coordinadora-bot
+```
+
+### Reiniciar el servidor
+
+```bash
+# Matar proceso actual y reiniciar
+lsof -i :3001 -t | xargs kill -9 2>/dev/null
+cd /root/proyectos/coordinadora-bot
+nohup npx tsx src/api/server.ts > /tmp/coordinadora-api.log 2>&1 &
+
+# O con pm2
+npx pm2 restart coordinadora-bot
+```
+
+### Ciclo de vida del Browser (Playwright)
+
+```
+IMPORTANTE: El browser NO se mantiene abierto permanentemente.
+
+Flujo por cada request:
+1. Llega request POST /api/crear-pedido
+2. Se ABRE un nuevo browser (Chromium headless)
+3. Se cargan cookies guardadas (si existen)
+4. Se hace login (o se verifica sesion activa)
+5. Se ejecuta la operacion (crear pedido)
+6. Se CIERRA el browser
+7. Se retorna respuesta
+
+Razon: Evitar fugas de memoria y problemas de sesion
+```
+
+### Manejo de Login y Sesion
+
+```
+El robot maneja la sesion automaticamente:
+
+1. PRIMERA VEZ:
+   - Abre browser
+   - Va a ff.coordinadora.com
+   - Detecta que no hay sesion
+   - Llena usuario/password
+   - Hace click en "Ingresar"
+   - Guarda cookies en storage/sessions/coordinadora-cookies.json
+
+2. SIGUIENTES VECES:
+   - Abre browser
+   - Carga cookies guardadas
+   - Va a ff.coordinadora.com
+   - Si redirige a /panel = sesion activa, continua
+   - Si no redirige = hace login de nuevo
+
+3. ARCHIVO DE COOKIES:
+   Ruta: /root/proyectos/coordinadora-bot/storage/sessions/coordinadora-cookies.json
+
+   Si hay problemas de sesion, borrar este archivo:
+   rm /root/proyectos/coordinadora-bot/storage/sessions/coordinadora-cookies.json
+```
+
+### Credenciales
+
+```bash
+# Las credenciales estan en el codigo (coordinadora-adapter.ts)
+# O pueden configurarse via variables de entorno:
+
+export COORDINADORA_URL=https://ff.coordinadora.com/
+export COORDINADORA_USER=tu_usuario
+export COORDINADORA_PASSWORD=tu_password
+
+# O crear archivo .env en /root/proyectos/coordinadora-bot/
+```
+
+### Troubleshooting Comun
+
+| Problema | Solucion |
+|----------|----------|
+| "Connection refused" desde n8n | Verificar que robot este corriendo: `lsof -i :3001` |
+| "Error en login" | Borrar cookies: `rm storage/sessions/coordinadora-cookies.json` |
+| Browser no cierra | Matar procesos: `pkill -f chromium` |
+| Puerto ocupado | Matar proceso: `lsof -i :3001 -t \| xargs kill -9` |
+| Timeout en operacion | Verificar conexion a ff.coordinadora.com |
 
 ---
 
