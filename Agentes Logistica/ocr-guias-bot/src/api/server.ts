@@ -319,14 +319,20 @@ app.post('/api/ocr/base64', async (req, res) => {
  * POST /api/ocr/urls
  * Recibe URLs de imágenes y extrae los datos de guías
  *
- * Body: { urls: ["https://...", ...] }
+ * Body: {
+ *   urls: ["https://...", ...],
+ *   slackToken?: "xoxb-..." // Token de Slack para descargar archivos privados
+ * }
  */
 app.post('/api/ocr/urls', async (req, res) => {
   console.log('\n' + '═'.repeat(60));
   console.log('📷 POST /api/ocr/urls');
   console.log('═'.repeat(60));
 
-  const { urls } = req.body;
+  const { urls, slackToken: requestSlackToken } = req.body;
+
+  // Usar token del request o del .env como fallback
+  const slackToken = requestSlackToken || process.env.SLACK_BOT_TOKEN;
 
   if (!Array.isArray(urls) || urls.length === 0) {
     return res.status(400).json({
@@ -336,13 +342,36 @@ app.post('/api/ocr/urls', async (req, res) => {
   }
 
   console.log(`📁 Recibidas ${urls.length} URL(s)`);
+  if (slackToken) {
+    console.log('🔑 Token de Slack disponible (env o request)');
+  }
 
   try {
     // Descargar las imágenes
     const tempPaths: string[] = [];
     for (let i = 0; i < urls.length; i++) {
       const url = urls[i];
-      const response = await fetch(url);
+
+      // Configurar headers para descarga
+      const fetchOptions: RequestInit = {};
+
+      // Si es URL de Slack y tenemos token, agregar autenticación
+      if (url.includes('files.slack.com') && slackToken) {
+        fetchOptions.headers = {
+          'Authorization': `Bearer ${slackToken}`,
+        };
+        console.log(`🔐 Descargando con auth: ${url.substring(0, 60)}...`);
+      } else if (url.includes('files.slack.com') && !slackToken) {
+        console.warn(`⚠️ URL de Slack sin token - puede fallar: ${url.substring(0, 60)}...`);
+      }
+
+      const response = await fetch(url, fetchOptions);
+
+      if (!response.ok) {
+        console.error(`❌ Error descargando ${url}: ${response.status} ${response.statusText}`);
+        throw new Error(`Error descargando imagen: ${response.status} ${response.statusText}`);
+      }
+
       const buffer = await response.arrayBuffer();
 
       // Determinar extensión

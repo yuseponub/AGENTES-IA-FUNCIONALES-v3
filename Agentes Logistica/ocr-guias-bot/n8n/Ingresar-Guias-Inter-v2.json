@@ -1,0 +1,806 @@
+{
+  "name": "Ingresar Guias Inter v2",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": ["message"],
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "options": {
+          "includeFileDetails": true
+        }
+      },
+      "id": "slack-trigger-inter",
+      "name": "Slack Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [-1400, 300],
+      "webhookId": "guias-inter-trigger-v2",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "condition-slack-inter",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "ingresa guias inter",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filtrar-comando-inter",
+      "name": "Filtrar Comando",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-1176, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-archivos",
+              "leftValue": "={{ $json.files?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-archivos",
+      "name": "Hay Archivos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-952, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "Por favor adjunta las fotos de las guias de Inter junto con el comando",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-archivos",
+      "name": "Slack: Sin Archivos",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [-728, 420],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer archivos de imagenes de Slack para descargar\nconst slackData = $input.first().json;\nconst files = slackData.files || [];\n\n// Filtrar solo imagenes\nconst imageFiles = files\n  .filter(f => f.mimetype?.startsWith('image/') || f.filetype?.match(/jpg|jpeg|png|gif|webp/i));\n\nconsole.log(`Encontradas ${imageFiles.length} imagenes para descargar`);\n\n// Retornar cada archivo como item separado para procesamiento paralelo\nreturn imageFiles.map((file, index) => ({\n  json: {\n    fileId: file.id,\n    fileName: file.name,\n    url: file.url_private_download || file.url_private,\n    mimetype: file.mimetype || 'image/jpeg',\n    index: index,\n    slackChannel: slackData.channel\n  }\n}));"
+      },
+      "id": "extraer-archivos-imagenes",
+      "name": "Extraer Archivos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-728, 180]
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $env.SLACK_BOT_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file"
+            }
+          }
+        }
+      },
+      "id": "descargar-imagen-slack",
+      "name": "Descargar Imagen",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-504, 180],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Convertir todas las imagenes descargadas a base64\nconst items = $input.all();\nconst imagenes = [];\n\nfor (const item of items) {\n  // Obtener datos binarios\n  const binaryData = item.binary?.data;\n  if (binaryData) {\n    imagenes.push({\n      data: binaryData.data, // ya está en base64\n      type: binaryData.mimeType || 'image/jpeg',\n      fileName: binaryData.fileName\n    });\n  }\n}\n\nconsole.log(`Convertidas ${imagenes.length} imagenes a base64`);\n\nreturn [{\n  json: {\n    imagenes: imagenes,\n    totalImagenes: imagenes.length\n  }\n}];"
+      },
+      "id": "convertir-base64",
+      "name": "Convertir a Base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-280, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refresh-bigin-token-inter",
+      "name": "Refresh Bigin Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-56, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "((Stage:equals:ESPERANDO GUIAS)and(Transportadora:equals:INTER))"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bigin-ordenes-inter",
+      "name": "Bigin: Ordenes INTER",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [168, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-ordenes-inter",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-ordenes-inter",
+      "name": "Hay Ordenes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [392, 180]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "No hay ordenes en *ESPERANDO GUIAS* con transportadora *INTER*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-ordenes-inter",
+      "name": "Slack: Sin Ordenes",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [616, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar datos para OCR y match\nconst biginData = $input.first().json;\nconst imageData = $('Convertir a Base64').first().json;\n\nconst ordenes = (biginData.data || []).map(o => ({\n  id: o.id,\n  Deal_Name: o.Deal_Name,\n  Phone: o.Phone,\n  Telefono: o.Telefono,\n  Direcci_n: o.Direcci_n,\n  Municipio_Dept: o.Municipio_Dept,\n  Stage: o.Stage\n}));\n\nconsole.log(`Ordenes Bigin: ${ordenes.length}`);\nconsole.log(`Imagenes base64: ${imageData.imagenes?.length}`);\n\nreturn [{\n  json: {\n    imagenes: imageData.imagenes,\n    ordenesBigin: ordenes,\n    totalOrdenes: ordenes.length,\n    totalImagenes: imageData.imagenes?.length || 0\n  }\n}];"
+      },
+      "id": "preparar-datos-ocr",
+      "name": "Preparar Datos OCR",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [616, 60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:3003/api/ocr/base64",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ imagenes: $json.imagenes }) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "id": "robot-ocr",
+      "name": "Robot: OCR Imagenes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [840, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-ocr-success",
+              "leftValue": "={{ $json.success && $json.guias?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ocr-exitoso",
+      "name": "OCR Exitoso?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1064, 60]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "No se pudo extraer informacion de las imagenes. Asegurate de que sean fotos claras de las guias de Inter.",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-ocr-fallido",
+      "name": "Slack: OCR Fallido",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1288, 180],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:3003/api/match-guias",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"guiasOCR\": {{ JSON.stringify($json.guias) }},\n  \"ordenesBigin\": {{ JSON.stringify($('Preparar Datos OCR').first().json.ordenesBigin) }},\n  \"transportadora\": \"INTER\"\n}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "id": "robot-match",
+      "name": "Robot: Match Guias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1288, -60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-matches",
+              "leftValue": "={{ $json.matches?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-matches",
+      "name": "Hay Matches?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1512, -60]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar actualizaciones para Bigin\nconst matchData = $input.first().json;\nconst matches = matchData.matches || [];\n\n// Solo actualizar matches con confianza >= 70%\nconst actualizaciones = matches\n  .filter(m => m.confianza >= 70)\n  .map(m => ({\n    biginId: m.orden.id,\n    dealName: m.orden.Deal_Name,\n    numeroGuia: m.guia.numeroGuia,\n    confianza: m.confianza,\n    razon: m.razon,\n    datosCorrectos: m.datosCorrectos,\n    esRecogeEnOficina: m.esRecogeEnOficina || false,\n    discrepancias: m.discrepancias || [],\n    tieneErroresAltos: m.discrepancias?.some(d => d.severidad === 'alta') || false\n  }));\n\nreturn actualizaciones.map(a => ({ json: a }));"
+      },
+      "id": "preparar-actualizaciones",
+      "name": "Preparar Actualizaciones",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1736, -180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refresh-token-update-inter",
+      "name": "Refresh Token Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1960, -180]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://www.zohoapis.com/bigin/v1/Deals/{{ $('Preparar Actualizaciones').item.json.biginId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": [{\n    \"Guia\": \"{{ $('Preparar Actualizaciones').item.json.numeroGuia }}\",\n    \"Stage\": \"INTER\"\n  }]\n}",
+        "options": {}
+      },
+      "id": "bigin-actualizar-inter",
+      "name": "Bigin: Actualizar Orden",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2184, -180]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar resumen final\nconst items = $input.all();\nconst matchData = $('Hay Matches?').first().json;\n\nconst exitosos = items.filter(i => i.json.data?.[0]?.code === 'SUCCESS').length;\nconst fallidos = items.length - exitosos;\n\nconst matchesCorrectos = (matchData.matches || []).filter(m => m.datosCorrectos);\nconst matchesConDiscrepancias = (matchData.matches || []).filter(m => !m.datosCorrectos && m.discrepancias?.length > 0);\nconst discrepanciasAltas = matchesConDiscrepancias.filter(m => m.discrepancias?.some(d => d.severidad === 'alta'));\n\nlet mensaje = `*Guias Inter - Resumen*\\n\\n`;\nmensaje += `Guias extraidas por OCR: ${matchData.matches?.length || 0}\\n`;\nmensaje += `Matches encontrados: ${matchData.matches?.length || 0}\\n`;\nmensaje += `Ordenes actualizadas: ${exitosos}\\n`;\nmensaje += `Datos correctos: ${matchesCorrectos.length}\\n`;\n\nif (discrepanciasAltas.length > 0) {\n  mensaje += `\\n:warning: *ALERTA: ${discrepanciasAltas.length} GUIA(S) CON ERRORES IMPORTANTES*\\n`;\n}\n\nif (exitosos > 0) {\n  mensaje += `\\n*Ordenes actualizadas:*\\n`;\n  const actualizaciones = $('Preparar Actualizaciones').all();\n  for (const act of actualizaciones) {\n    const match = matchData.matches?.find(m => m.orden?.id === act.json.biginId);\n    const icon = match?.datosCorrectos ? ':white_check_mark:' : ':warning:';\n    mensaje += `${icon} ${act.json.dealName}\\n  Guia: ${act.json.numeroGuia} (${act.json.confianza}% confianza)\\n`;\n    \n    if (match?.discrepancias?.length > 0) {\n      for (const d of match.discrepancias) {\n        const sev = d.severidad === 'alta' ? ':red_circle:' : d.severidad === 'media' ? ':large_orange_circle:' : ':large_yellow_circle:';\n        mensaje += `  ${sev} ${d.campo}: \"${d.valorGuia}\" vs \"${d.valorBigin}\"\\n`;\n      }\n    }\n  }\n}\n\nif (matchData.guiasSinMatch?.length > 0) {\n  mensaje += `\\n*Guias sin match:*\\n`;\n  for (const g of matchData.guiasSinMatch) {\n    mensaje += `• Guia: ${g.numeroGuia} - ${g.destinatario || 'Sin nombre'}\\n`;\n  }\n}\n\nif (matchData.ordenesSinMatch?.length > 0) {\n  mensaje += `\\n*Ordenes sin guia:*\\n`;\n  for (const o of matchData.ordenesSinMatch) {\n    mensaje += `• ${o.Deal_Name}\\n`;\n  }\n}\n\nif (discrepanciasAltas.length > 0) {\n  mensaje += `\\n:rotating_light: *REVISAR: Los datos de las guias con errores pueden causar problemas de entrega*`;\n}\n\nreturn [{ json: { mensaje } }];"
+      },
+      "id": "generar-resumen-inter",
+      "name": "Generar Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2408, -180]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-resultado-inter",
+      "name": "Slack: Resultado",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [2632, -180],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const matchData = $input.first().json;\n\nlet mensaje = `*Guias Inter - Resultado*\\n\\n`;\nmensaje += `Se extrajeron guias pero no se encontraron matches con las ordenes de Bigin.\\n\\n`;\n\nif (matchData.guiasSinMatch?.length > 0) {\n  mensaje += `*Guias extraidas sin match:*\\n`;\n  for (const g of matchData.guiasSinMatch) {\n    mensaje += `• Guia: ${g.numeroGuia}\\n  Destinatario: ${g.destinatario || 'N/A'}\\n  Tel: ${g.telefono || 'N/A'}\\n`;\n  }\n}\n\nmensaje += `\\nRevisa que las ordenes esten en el stage correcto y que los datos coincidan.`;\n\nreturn [{ json: { mensaje } }];"
+      },
+      "id": "mensaje-sin-matches",
+      "name": "Mensaje Sin Matches",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1736, 60]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-matches",
+      "name": "Slack: Sin Matches",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1960, 60],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Comando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Comando": {
+      "main": [
+        [
+          {
+            "node": "Hay Archivos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Archivos?": {
+      "main": [
+        [
+          {
+            "node": "Extraer Archivos",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Archivos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Archivos": {
+      "main": [
+        [
+          {
+            "node": "Descargar Imagen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar Imagen": {
+      "main": [
+        [
+          {
+            "node": "Convertir a Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convertir a Base64": {
+      "main": [
+        [
+          {
+            "node": "Refresh Bigin Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Bigin Token": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Ordenes INTER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Ordenes INTER": {
+      "main": [
+        [
+          {
+            "node": "Hay Ordenes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Ordenes?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Datos OCR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Ordenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Datos OCR": {
+      "main": [
+        [
+          {
+            "node": "Robot: OCR Imagenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: OCR Imagenes": {
+      "main": [
+        [
+          {
+            "node": "OCR Exitoso?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Exitoso?": {
+      "main": [
+        [
+          {
+            "node": "Robot: Match Guias",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: OCR Fallido",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: Match Guias": {
+      "main": [
+        [
+          {
+            "node": "Hay Matches?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Matches?": {
+      "main": [
+        [
+          {
+            "node": "Preparar Actualizaciones",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensaje Sin Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Preparar Actualizaciones": {
+      "main": [
+        [
+          {
+            "node": "Refresh Token Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Token Update": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Actualizar Orden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Actualizar Orden": {
+      "main": [
+        [
+          {
+            "node": "Generar Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Resumen": {
+      "main": [
+        [
+          {
+            "node": "Slack: Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje Sin Matches": {
+      "main": [
+        [
+          {
+            "node": "Slack: Sin Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "Logistica"
+    }
+  ]
+}
