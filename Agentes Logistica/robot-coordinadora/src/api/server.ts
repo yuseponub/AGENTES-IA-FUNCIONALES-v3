@@ -508,7 +508,7 @@ app.post('/api/crear-pedidos-batch', async (req, res) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(pedido),
       });
-      const result = await response.json();
+      const result = await response.json() as Record<string, unknown>;
       resultados.push({
         ...result,
         index: i,
@@ -544,6 +544,109 @@ app.post('/api/crear-pedidos-batch', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════════════
+// ENDPOINTS DE BÚSQUEDA DE GUÍAS
+// ═══════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/buscar-guia
+ * Busca la guía de un pedido específico en Coordinadora
+ */
+app.post('/api/buscar-guia', async (req, res) => {
+  console.log('\n' + '═'.repeat(60));
+  console.log('🔍 POST /api/buscar-guia');
+  console.log('═'.repeat(60));
+
+  const { numeroPedido } = req.body;
+
+  if (!numeroPedido) {
+    return res.status(400).json({
+      success: false,
+      error: 'Falta el campo numeroPedido',
+    });
+  }
+
+  console.log(`📋 Buscando guía para pedido: ${numeroPedido}`);
+
+  let coordinadora: CoordinadoraAdapter | null = null;
+
+  try {
+    coordinadora = await createAdapter();
+    const result = await coordinadora.buscarGuiaPorPedido(numeroPedido.toString());
+
+    res.json(result);
+
+  } catch (error) {
+    console.error('❌ Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    });
+  } finally {
+    if (coordinadora) {
+      console.log('🔒 Cerrando browser...');
+      await coordinadora.close();
+    }
+  }
+});
+
+/**
+ * POST /api/buscar-guias
+ * Busca las guías de múltiples pedidos en Coordinadora
+ *
+ * Body: { numerosPedidos: ["9597", "9596", ...] }
+ */
+app.post('/api/buscar-guias', async (req, res) => {
+  console.log('\n' + '═'.repeat(60));
+  console.log('🔍 POST /api/buscar-guias');
+  console.log('═'.repeat(60));
+
+  const { numerosPedidos } = req.body;
+
+  if (!Array.isArray(numerosPedidos) || numerosPedidos.length === 0) {
+    return res.status(400).json({
+      success: false,
+      error: 'Se requiere un array de numerosPedidos',
+    });
+  }
+
+  console.log(`📋 Buscando guías para ${numerosPedidos.length} pedidos...`);
+
+  let coordinadora: CoordinadoraAdapter | null = null;
+
+  try {
+    coordinadora = await createAdapter();
+    const resultados = await coordinadora.buscarGuiasPorPedidos(
+      numerosPedidos.map((n: any) => n.toString())
+    );
+
+    const exitosos = resultados.filter(r => r.success);
+    const fallidos = resultados.filter(r => !r.success);
+
+    console.log(`📊 Resumen: ${exitosos.length} encontrados, ${fallidos.length} sin guía`);
+
+    res.json({
+      success: true,
+      total: numerosPedidos.length,
+      encontrados: exitosos.length,
+      sinGuia: fallidos.length,
+      resultados,
+    });
+
+  } catch (error) {
+    console.error('❌ Error:', error);
+    res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    });
+  } finally {
+    if (coordinadora) {
+      console.log('🔒 Cerrando browser...');
+      await coordinadora.close();
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
 // INICIAR SERVIDOR
 // ═══════════════════════════════════════════════════════════════════
 
@@ -556,10 +659,12 @@ app.listen(PORT, () => {
   console.log(`📍 URL: http://localhost:${PORT}`);
   console.log('');
   console.log('📋 Endpoints disponibles:');
-  console.log(`   GET  /api/health         - Estado del servicio`);
-  console.log(`   GET  /api/ultimo-pedido  - Último número de pedido`);
-  console.log(`   POST /api/crear-pedido   - Crear un pedido`);
+  console.log(`   GET  /api/health              - Estado del servicio`);
+  console.log(`   GET  /api/ultimo-pedido       - Último número de pedido`);
+  console.log(`   POST /api/crear-pedido        - Crear un pedido`);
   console.log(`   POST /api/crear-pedidos-batch - Crear múltiples pedidos`);
+  console.log(`   POST /api/buscar-guia         - Buscar guía de un pedido`);
+  console.log(`   POST /api/buscar-guias        - Buscar guías de múltiples pedidos`);
   console.log('');
   console.log('⏳ Esperando requests de n8n...');
   console.log('═'.repeat(60) + '\n');

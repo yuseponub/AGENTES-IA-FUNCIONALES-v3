@@ -643,6 +643,217 @@ export class CoordinadoraAdapter {
     }
   }
 
+  /**
+   * Buscar guía por número de pedido
+   * Navega a la tabla de pedidos, busca por # de pedido y extrae el # de guía
+   */
+  async buscarGuiaPorPedido(numeroPedido: string): Promise<{ success: boolean; numeroGuia?: string; estado?: string; error?: string }> {
+    if (!this.isLoggedIn) {
+      const loginSuccess = await this.login();
+      if (!loginSuccess) {
+        return { success: false, error: 'No se pudo iniciar sesión en Coordinadora' };
+      }
+    }
+
+    console.log(`🔍 Buscando guía para pedido #${numeroPedido}...`);
+
+    try {
+      // 1. Navegar a la página de pedidos
+      await this.page!.goto(URLS.pedidos, { waitUntil: 'networkidle', timeout: 30000 });
+      await this.page!.waitForTimeout(2000);
+
+      // 2. Usar el campo de búsqueda
+      const searchInput = await this.page!.$('input[placeholder*="buscar"], input[type="search"], input.MuiInputBase-input');
+      if (searchInput) {
+        // Limpiar y escribir el número de pedido
+        await searchInput.click();
+        await searchInput.fill('');
+        await searchInput.fill(numeroPedido);
+        await this.page!.keyboard.press('Enter');
+        await this.page!.waitForTimeout(2000);
+      }
+
+      // 3. Buscar la fila con el pedido
+      // La estructura es: Pedido | Guía | Almacén | Fecha | Nombre | ...
+      const rows = await this.page!.$$('table tbody tr, .MuiDataGrid-row, [role="row"]');
+
+      for (const row of rows) {
+        const cells = await row.$$('td, [role="cell"], .MuiDataGrid-cell');
+        if (cells.length >= 2) {
+          const pedidoCell = await cells[0].textContent();
+          const pedidoText = pedidoCell?.trim() || '';
+
+          // Verificar si es el pedido que buscamos
+          if (pedidoText === numeroPedido || pedidoText.includes(numeroPedido)) {
+            // Extraer la guía (segunda columna)
+            const guiaCell = await cells[1].textContent();
+            const guiaText = guiaCell?.trim() || '';
+
+            // Extraer el estado si está disponible (columna ~7)
+            let estadoText = '';
+            if (cells.length >= 7) {
+              const estadoCell = await cells[6].textContent();
+              estadoText = estadoCell?.trim() || '';
+            }
+
+            if (guiaText && guiaText.length > 5) {
+              console.log(`✅ Guía encontrada: ${guiaText}`);
+              return {
+                success: true,
+                numeroGuia: guiaText,
+                estado: estadoText
+              };
+            } else {
+              console.log(`⚠️ Pedido ${numeroPedido} encontrado pero sin guía asignada`);
+              return {
+                success: false,
+                error: 'Pedido encontrado pero sin guía asignada aún'
+              };
+            }
+          }
+        }
+      }
+
+      // Si no encontró con búsqueda, intentar scroll y búsqueda manual
+      console.log('⚠️ Buscando en toda la tabla...');
+
+      // Buscar todos los links de pedidos
+      const pedidoLinks = await this.page!.$$('a');
+      for (const link of pedidoLinks) {
+        const text = await link.textContent();
+        if (text?.trim() === numeroPedido) {
+          // Encontró el pedido, buscar la guía en la misma fila
+          const row = await link.evaluateHandle(el => el.closest('tr') || el.closest('[role="row"]'));
+          if (row) {
+            const rowElement = row.asElement();
+            if (rowElement) {
+              const cells = await rowElement.$$('td, [role="cell"]');
+              if (cells.length >= 2) {
+                const guiaText = await cells[1].textContent();
+                if (guiaText && guiaText.trim().length > 5) {
+                  console.log(`✅ Guía encontrada (método 2): ${guiaText.trim()}`);
+                  return {
+                    success: true,
+                    numeroGuia: guiaText.trim()
+                  };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      console.log(`❌ No se encontró el pedido #${numeroPedido}`);
+      return {
+        success: false,
+        error: `No se encontró el pedido #${numeroPedido}`
+      };
+
+    } catch (error) {
+      console.error('❌ Error buscando guía:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      };
+    }
+  }
+
+  /**
+   * Buscar múltiples guías por números de pedido
+   */
+  async buscarGuiasPorPedidos(numerosPedidos: string[]): Promise<Array<{ numeroPedido: string; numeroGuia?: string; estado?: string; success: boolean; error?: string }>> {
+    const resultados: Array<{ numeroPedido: string; numeroGuia?: string; estado?: string; success: boolean; error?: string }> = [];
+
+    if (!this.isLoggedIn) {
+      const loginSuccess = await this.login();
+      if (!loginSuccess) {
+        return numerosPedidos.map(num => ({
+          numeroPedido: num,
+          success: false,
+          error: 'No se pudo iniciar sesión en Coordinadora'
+        }));
+      }
+    }
+
+    console.log(`🔍 Buscando guías para ${numerosPedidos.length} pedidos...`);
+
+    try {
+      // Navegar a la página de pedidos una sola vez
+      await this.page!.goto(URLS.pedidos, { waitUntil: 'networkidle', timeout: 30000 });
+      await this.page!.waitForTimeout(3000);
+
+      // Obtener todos los pedidos visibles de la tabla
+      const pedidosEnTabla = new Map<string, { guia: string; estado: string }>();
+
+      // Recorrer todas las filas de la tabla
+      const rows = await this.page!.$$('table tbody tr');
+      for (const row of rows) {
+        const cells = await row.$$('td');
+        if (cells.length >= 2) {
+          const pedidoLink = await cells[0].$('a');
+          if (pedidoLink) {
+            const pedidoText = await pedidoLink.textContent();
+            const guiaText = await cells[1].textContent();
+            let estadoText = '';
+            if (cells.length >= 7) {
+              estadoText = await cells[6].textContent() || '';
+            }
+
+            if (pedidoText && guiaText) {
+              pedidosEnTabla.set(pedidoText.trim(), {
+                guia: guiaText.trim(),
+                estado: estadoText.trim()
+              });
+            }
+          }
+        }
+      }
+
+      console.log(`📋 Encontrados ${pedidosEnTabla.size} pedidos en la tabla`);
+
+      // Buscar cada pedido solicitado
+      for (const numeroPedido of numerosPedidos) {
+        const info = pedidosEnTabla.get(numeroPedido);
+        if (info && info.guia && info.guia.length > 5) {
+          resultados.push({
+            numeroPedido,
+            numeroGuia: info.guia,
+            estado: info.estado,
+            success: true
+          });
+          console.log(`  ✅ ${numeroPedido} → ${info.guia}`);
+        } else if (info) {
+          resultados.push({
+            numeroPedido,
+            success: false,
+            error: 'Pedido encontrado pero sin guía asignada'
+          });
+          console.log(`  ⚠️ ${numeroPedido} → sin guía`);
+        } else {
+          // Intentar búsqueda individual
+          const result = await this.buscarGuiaPorPedido(numeroPedido);
+          resultados.push({
+            numeroPedido,
+            ...result
+          });
+        }
+
+        // Pequeña pausa entre búsquedas
+        await this.page!.waitForTimeout(500);
+      }
+
+      return resultados;
+
+    } catch (error) {
+      console.error('❌ Error buscando guías:', error);
+      return numerosPedidos.map(num => ({
+        numeroPedido: num,
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido'
+      }));
+    }
+  }
+
   async close(): Promise<void> {
     if (this.browser) {
       await this.browser.close();

@@ -1,0 +1,639 @@
+{
+  "name": "Ingresar Guias Coordinadora",
+  "nodes": [
+    {
+      "parameters": {
+        "trigger": ["message"],
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "slack-trigger-guias",
+      "name": "Slack Trigger",
+      "type": "n8n-nodes-base.slackTrigger",
+      "typeVersion": 1,
+      "position": [-1200, 300],
+      "webhookId": "guias-coord-trigger",
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "condition-slack-guias",
+              "leftValue": "={{ $json.text.toLowerCase() }}",
+              "rightValue": "ingresa guias coord",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filtrar-mensaje-guias",
+      "name": "Filtrar Comando",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [-976, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refresh-bigin-token-guias",
+      "name": "Refresh Bigin Token",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-752, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://www.zohoapis.com/bigin/v1/Deals/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "criteria",
+              "value": "(Stage:equals:COORDINADORA)"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "bigin-obtener-ordenes-coord",
+      "name": "Bigin: Ordenes en COORDINADORA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [-528, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-orders-coord",
+              "leftValue": "={{ $json.data?.length > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-ordenes-coord",
+      "name": "Hay Ordenes?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [-304, 300]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "No hay ordenes en el stage *COORDINADORA*",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-ordenes",
+      "name": "Slack: Sin Ordenes",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [-80, 420],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extraer los numeros de pedido de las ordenes de Bigin\n// El # de pedido esta temporalmente en el campo 'Guia' de Bigin\nconst ordenes = $input.first().json.data || [];\n\nconst pedidosParaBuscar = ordenes\n  .filter(orden => orden.Guia && orden.Guia.trim().length > 0)\n  .map(orden => ({\n    biginId: orden.id,\n    dealName: orden.Deal_Name,\n    numeroPedido: orden.Guia.trim(),  // El # de pedido esta en 'Guia' temporalmente\n    telefono: orden.Phone,\n    stage: orden.Stage\n  }));\n\nconsole.log(`Encontradas ${pedidosParaBuscar.length} ordenes con # de pedido`);\n\nreturn [{\n  json: {\n    ordenes: pedidosParaBuscar,\n    numerosPedidos: pedidosParaBuscar.map(p => p.numeroPedido),\n    totalOrdenes: pedidosParaBuscar.length\n  }\n}];"
+      },
+      "id": "extraer-numeros-pedido",
+      "name": "Extraer Numeros de Pedido",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-80, 180]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-pedidos",
+              "leftValue": "={{ $json.totalOrdenes > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-pedidos-buscar",
+      "name": "Hay Pedidos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [144, 180]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "No hay ordenes con # de pedido para buscar guias",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-pedidos",
+      "name": "Slack: Sin Pedidos",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [368, 300],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://172.17.0.1:3001/api/buscar-guias",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ numerosPedidos: $json.numerosPedidos }) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "id": "robot-buscar-guias",
+      "name": "Robot: Buscar Guias",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [368, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Combinar resultados del robot con datos de Bigin\nconst robotResult = $input.first().json;\nconst ordenesOriginales = $('Extraer Numeros de Pedido').first().json.ordenes;\n\nconst resultados = [];\n\nfor (const robot of (robotResult.resultados || [])) {\n  const ordenBigin = ordenesOriginales.find(o => o.numeroPedido === robot.numeroPedido);\n  \n  if (ordenBigin && robot.success && robot.numeroGuia) {\n    resultados.push({\n      biginId: ordenBigin.biginId,\n      dealName: ordenBigin.dealName,\n      numeroPedido: robot.numeroPedido,\n      numeroGuia: robot.numeroGuia,\n      estadoCoord: robot.estado || '',\n      tieneGuia: true\n    });\n  } else if (ordenBigin) {\n    resultados.push({\n      biginId: ordenBigin.biginId,\n      dealName: ordenBigin.dealName,\n      numeroPedido: robot.numeroPedido,\n      error: robot.error || 'Sin guia asignada',\n      tieneGuia: false\n    });\n  }\n}\n\nconst conGuia = resultados.filter(r => r.tieneGuia);\nconst sinGuia = resultados.filter(r => !r.tieneGuia);\n\nreturn [{\n  json: {\n    resultados,\n    conGuia,\n    sinGuia,\n    totalConGuia: conGuia.length,\n    totalSinGuia: sinGuia.length\n  }\n}];"
+      },
+      "id": "procesar-resultados-robot",
+      "name": "Procesar Resultados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [592, 60]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "check-con-guia",
+              "leftValue": "={{ $json.totalConGuia > 0 }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "hay-guias-actualizar",
+      "name": "Hay Guias?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [816, 60]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Preparar items individuales para actualizar en Bigin\nconst data = $input.first().json;\nconst conGuia = data.conGuia || [];\n\nreturn conGuia.map(item => ({ json: item }));"
+      },
+      "id": "split-ordenes-actualizar",
+      "name": "Split Ordenes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, -60]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://accounts.zoho.com/oauth/v2/token",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "refresh_token",
+              "value": "1000.ffacc81e6474de4c1e55afbedad4f8ef.10de44fb974487be41421eb8a292754d"
+            },
+            {
+              "name": "client_id",
+              "value": "1000.1O753Z59ILMC38F7RO0639XVTQGNAL"
+            },
+            {
+              "name": "client_secret",
+              "value": "0d3d0df40e7c665812a6379e660791c1ad47f75696"
+            },
+            {
+              "name": "grant_type",
+              "value": "refresh_token"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "refresh-token-update",
+      "name": "Refresh Token Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1264, -60]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "=https://www.zohoapis.com/bigin/v1/Deals/{{ $('Split Ordenes').item.json.biginId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Zoho-oauthtoken {{ $json.access_token }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"data\": [{\n    \"Guia\": \"{{ $('Split Ordenes').item.json.numeroGuia }}\",\n    \"Stage\": \"ENVIA\"\n  }]\n}",
+        "options": {}
+      },
+      "id": "bigin-actualizar-orden",
+      "name": "Bigin: Actualizar Orden",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1488, -60]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar resumen de actualizaciones\nconst items = $input.all();\nconst originalData = $('Procesar Resultados').first().json;\n\nconst exitosos = items.filter(i => i.json.data?.[0]?.code === 'SUCCESS').length;\nconst fallidos = items.length - exitosos;\n\nlet mensaje = `*Guias Coordinadora - Resumen*\\n\\n`;\nmensaje += `Total ordenes procesadas: ${originalData.resultados?.length || 0}\\n`;\nmensaje += `Con guia encontrada: ${originalData.totalConGuia}\\n`;\nmensaje += `Sin guia aun: ${originalData.totalSinGuia}\\n\\n`;\n\nif (exitosos > 0) {\n  mensaje += `*${exitosos} orden(es) actualizada(s) en Bigin:*\\n`;\n  for (const item of originalData.conGuia || []) {\n    mensaje += `• ${item.dealName}\\n  Pedido: ${item.numeroPedido} → Guia: ${item.numeroGuia}\\n`;\n  }\n}\n\nif (originalData.totalSinGuia > 0) {\n  mensaje += `\\n*${originalData.totalSinGuia} sin guia (pendientes):*\\n`;\n  for (const item of originalData.sinGuia || []) {\n    mensaje += `• ${item.dealName} - Pedido: ${item.numeroPedido}\\n`;\n  }\n}\n\nreturn [{ json: { mensaje } }];"
+      },
+      "id": "generar-resumen-final",
+      "name": "Generar Resumen",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1712, -60]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-resultado-final",
+      "name": "Slack: Resultado",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1936, -60],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Generar mensaje cuando no hay guias para actualizar\nconst data = $input.first().json;\n\nlet mensaje = `*Guias Coordinadora - Resultado*\\n\\n`;\nmensaje += `Se buscaron ${data.resultados?.length || 0} ordenes.\\n\\n`;\nmensaje += `*Ninguna tiene guia asignada aun:*\\n`;\n\nfor (const item of data.sinGuia || []) {\n  mensaje += `• ${item.dealName} - Pedido: ${item.numeroPedido}\\n`;\n}\n\nmensaje += `\\nCoordinadora aun no ha generado las guias. Intenta mas tarde.`;\n\nreturn [{ json: { mensaje } }];"
+      },
+      "id": "generar-mensaje-sin-guias",
+      "name": "Mensaje Sin Guias",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1040, 180]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0A9M96C0AK",
+          "mode": "id"
+        },
+        "text": "={{ $json.mensaje }}",
+        "otherOptions": {
+          "mrkdwn": true
+        }
+      },
+      "id": "slack-sin-guias",
+      "name": "Slack: Sin Guias",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1264, 180],
+      "credentials": {
+        "slackApi": {
+          "id": "Y6LxxE3sffV7XYLy",
+          "name": "Slack account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Slack Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filtrar Comando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar Comando": {
+      "main": [
+        [
+          {
+            "node": "Refresh Bigin Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Bigin Token": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Ordenes en COORDINADORA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Ordenes en COORDINADORA": {
+      "main": [
+        [
+          {
+            "node": "Hay Ordenes?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Ordenes?": {
+      "main": [
+        [
+          {
+            "node": "Extraer Numeros de Pedido",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Ordenes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraer Numeros de Pedido": {
+      "main": [
+        [
+          {
+            "node": "Hay Pedidos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Pedidos?": {
+      "main": [
+        [
+          {
+            "node": "Robot: Buscar Guias",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Sin Pedidos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Robot: Buscar Guias": {
+      "main": [
+        [
+          {
+            "node": "Procesar Resultados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Procesar Resultados": {
+      "main": [
+        [
+          {
+            "node": "Hay Guias?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Hay Guias?": {
+      "main": [
+        [
+          {
+            "node": "Split Ordenes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mensaje Sin Guias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Ordenes": {
+      "main": [
+        [
+          {
+            "node": "Refresh Token Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh Token Update": {
+      "main": [
+        [
+          {
+            "node": "Bigin: Actualizar Orden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bigin: Actualizar Orden": {
+      "main": [
+        [
+          {
+            "node": "Generar Resumen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generar Resumen": {
+      "main": [
+        [
+          {
+            "node": "Slack: Resultado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mensaje Sin Guias": {
+      "main": [
+        [
+          {
+            "node": "Slack: Sin Guias",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [
+    {
+      "name": "Logistica"
+    }
+  ]
+}
